@@ -1,0 +1,19 @@
+{
+  "name": "pleural-telemonitoring",
+  "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev:mobile": "pnpm --filter @pleural/mobile start",
+    "dev:dashboard": "pnpm --filter @pleural/dashboard dev",
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "build": "pnpm --filter @pleural/dashboard build",
+    "build:mobile": "pnpm --filter @pleural/mobile build",
+    "dev:up": "docker compose up -d --build --wait",
+    "dev:down": "docker compose down"
+  }
+}

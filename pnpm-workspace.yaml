@@ -1,0 +1,8 @@
+packages:
+  - apps/mobile
+  - apps/dashboard
+
+# Expo recommends isolated dependencies for modern SDKs.
+nodeLinker: isolated
+onlyBuiltDependencies:
+  - esbuild
