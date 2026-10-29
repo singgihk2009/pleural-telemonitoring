@@ -5,7 +5,7 @@ placeholder screens; the API exposes infrastructure health checks only.
 
 ## Repository
 
-- `apps/mobile`: React Native + Expo + TypeScript (Android first).
+- `apps/mobile`: React Native + Expo Router + TypeScript (Android first).
 - `apps/api`: Laravel 12 REST API, PHP 8.4, Composer 2.
 - `apps/dashboard`: React + Vite + TypeScript.
 - `compose.yaml`: local MySQL 8.4, API, and dashboard.
@@ -34,15 +34,15 @@ application key on first start, and waits for readiness. Check locally:
 
 ```sh
 curl --fail http://localhost:8000/up
-curl --fail http://localhost:8000/api/health
+curl --fail http://localhost:8000/api/v1/health
 curl --fail http://localhost:5173
 pnpm dev:mobile
 ```
 
-`GET /up` checks Laravel liveness. `GET /api/health` runs `SELECT 1` against MySQL
-and returns `{"status":"ok","database":"connected"}`; database failures return
-an error response. There are no authenticated or clinical endpoints. Mobile is
-run on the host so the Expo QR code/device connection works normally. The apps
+`GET /up` checks Laravel liveness. `GET /api/v1/health` runs `SELECT 1` against MySQL
+and returns `{"status":"ok","database":"connected"}`; database query failures
+return HTTP 503 with `{"status":"unavailable","database":"disconnected"}`.
+There are no authenticated or clinical endpoints. Mobile is run on the host so the Expo QR code/device connection works normally. The apps
 are not yet connected to the API.
 
 All published Compose ports bind to loopback. Database credentials in Compose and
@@ -80,6 +80,7 @@ uses `127.0.0.1`. No migrations are required by this bootstrap.
 
 ```sh
 pnpm install --frozen-lockfile
+pnpm validate:openapi             # OpenAPI 3.1 schema and contract lint
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -96,3 +97,23 @@ to in-memory SQLite in `phpunit.xml`; Compose and CI provide MySQL through proce
 environment variables. GitHub Actions runs the JS checks, API tests with MySQL,
 and a Compose startup/HTTP smoke check. It has read-only repository permissions
 and no deploy step.
+
+## API contract, routing and browser access
+
+The health contract is documented in [OpenAPI 3.1](docs/api/openapi.yaml) and
+validated by `pnpm validate:openapi` locally and in CI. `/up` remains a separate
+unversioned Laravel liveness probe. API routes use the `/api/v1` prefix.
+
+The mobile entry point is `expo-router/entry`, with a minimal Stack layout and
+index route in `apps/mobile/src/app`. The index shows the development placeholder;
+there are no clinical routes. Non-route components and tests live outside that
+route directory. Existing mobile-specific guidance remains in
+`apps/mobile/AGENTS.md`; repository-wide rules are in `AGENTS.md`.
+
+Development CORS permits exactly `http://localhost:5173` for GET/OPTIONS requests
+to `/api/v1/*`, with Accept/Content-Type headers and credentials disabled.
+Use that dashboard URL in the browser: `127.0.0.1`, another port, and other
+origins are deliberately not allowed. Vite uses port 5173 with strict port
+selection so it cannot silently move to an unapproved origin. CORS does not
+protect the API from non-browser clients and is not authentication. This policy
+is for the local bootstrap; production configuration is outside PR-01.

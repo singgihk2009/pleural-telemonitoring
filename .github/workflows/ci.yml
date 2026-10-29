@@ -16,6 +16,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm validate:openapi
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -69,7 +70,7 @@ jobs:
       - run: docker compose config --quiet
       - run: docker compose up -d --build --wait --wait-timeout 600
       - run: |
-          curl --fail http://127.0.0.1:8000/api/health
+          curl --fail http://127.0.0.1:8000/api/v1/health
           curl --fail http://127.0.0.1:5173
       - if: failure()
         run: docker compose logs --no-color

@@ -42,7 +42,7 @@ services:
         condition: service_healthy
     command: ["sh", "-ec", "composer install --no-interaction --prefer-$${COMPOSER_INSTALL_MODE:-dist}; if [ ! -f .env ]; then cp .env.example .env; fi; if ! grep -Eq '^APP_KEY=.+$$' .env; then php artisan key:generate; fi; exec php artisan serve --no-reload --host=0.0.0.0 --port=8000"]
     healthcheck:
-      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8000/api/health') === false ? 1 : 0);"]
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8000/api/v1/health') === false ? 1 : 0);"]
       interval: 5s
       timeout: 5s
       retries: 30

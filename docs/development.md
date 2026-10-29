@@ -22,7 +22,7 @@ only; it must retain the committed package versions. A Dockerfile build still
 needs access to the configured Debian mirrors. Never disable TLS verification.
 
 `docker compose up --wait` is the readiness gate. Inspect `docker compose logs`
-when it fails, and verify both `/api/health` and the dashboard with HTTP requests.
+when it fails, and verify both `/api/v1/health` and the dashboard with HTTP requests.
 Live processes do not survive an environment snapshot; restart Compose and Expo
 in each task. Do not publish localhost preview links from cloud onboarding.
 
@@ -30,3 +30,12 @@ The container uses `artisan serve --no-reload` so Laravel preserves Compose
 environment overrides (including the MySQL service hostname) in its HTTP worker.
 After editing API environment values, restart the API container. PHP source edits
 still take effect on subsequent requests.
+
+## Review checks
+
+Validate `docs/api/openapi.yaml` with `pnpm validate:openapi`. API regression tests
+cover the versioned health contract, sanitized database failures, the absence of
+the old unversioned API route, and approved/rejected CORS origins and preflights.
+The mobile Router test opens `/` through the real layout and index route.
+Only the local dashboard origin `http://localhost:5173` is approved for browser
+requests; no credentialed CORS requests or patient fixtures belong in PR-01.
