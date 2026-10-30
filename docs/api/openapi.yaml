@@ -1,0 +1,68 @@
+openapi: 3.1.0
+info:
+  title: Pleural Telemonitoring Development API
+  version: 0.1.0
+  description: >-
+    PR-01 infrastructure health contract. Public, unauthenticated development
+    endpoints indicate service availability only, not clinical readiness.
+servers:
+  - url: http://localhost:8000
+    description: Local development API
+security: []
+tags:
+  - name: Health
+    description: Infrastructure readiness
+paths:
+  /api/v1/health:
+    get:
+      operationId: getHealth
+      summary: Check API and database readiness
+      description: >-
+        Runs a read-only SELECT 1 against the configured database. Returns a
+        sanitized 503 response when the database query fails. No clinical data
+        is read or written. Development browser access is restricted to
+        http://localhost:5173 without credentials; CORS is not access control.
+      tags: [Health]
+      responses:
+        '200':
+          description: The API and database are available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadyHealth'
+              example:
+                status: ok
+                database: connected
+        '503':
+          description: The database is unavailable; connection details are omitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnavailableHealth'
+              example:
+                status: unavailable
+                database: disconnected
+components:
+  schemas:
+    ReadyHealth:
+      type: object
+      additionalProperties: false
+      required: [status, database]
+      properties:
+        status:
+          type: string
+          const: ok
+        database:
+          type: string
+          const: connected
+    UnavailableHealth:
+      type: object
+      additionalProperties: false
+      required: [status, database]
+      properties:
+        status:
+          type: string
+          const: unavailable
+        database:
+          type: string
+          const: disconnected

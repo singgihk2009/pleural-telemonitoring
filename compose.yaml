@@ -1,0 +1,74 @@
+name: pleural-development
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: pleural_dev
+      MYSQL_USER: pleural
+      MYSQL_PASSWORD: pleural_dev_only
+      MYSQL_ROOT_PASSWORD: root_dev_only
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -u $$MYSQL_USER $$MYSQL_DATABASE -e 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  api:
+    build: apps/api
+    working_dir: /app
+    volumes:
+      - ./apps/api:/app
+      - api_vendor:/app/vendor
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: pleural_dev
+      DB_USERNAME: pleural
+      DB_PASSWORD: pleural_dev_only
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["sh", "-ec", "composer install --no-interaction --prefer-$${COMPOSER_INSTALL_MODE:-dist}; if [ ! -f .env ]; then cp .env.example .env; fi; if ! grep -Eq '^APP_KEY=.+$$' .env; then php artisan key:generate; fi; exec php artisan serve --no-reload --host=0.0.0.0 --port=8000"]
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8000/api/v1/health') === false ? 1 : 0);"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+  dashboard:
+    image: node:24-bookworm-slim
+    environment:
+      NODE_USE_ENV_PROXY: "1"
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - dashboard_modules:/workspace/node_modules
+      - dashboard_app_modules:/workspace/apps/dashboard/node_modules
+      - mobile_app_modules:/workspace/apps/mobile/node_modules
+    ports:
+      - "127.0.0.1:5173:5173"
+    command: ["sh", "-ec", "corepack pnpm install --frozen-lockfile; exec corepack pnpm --filter @pleural/dashboard dev --host 0.0.0.0"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+volumes:
+  mysql_data:
+  api_vendor:
+  dashboard_modules:
+  dashboard_app_modules:
+  mobile_app_modules:
