@@ -1,0 +1,135 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        DB::statement("ALTER TABLE peringatan ADD CONSTRAINT intervention_alert CHECK (kelompok = 'INTERVENSI')");
+        DB::statement("ALTER TABLE `pengguna` ADD CONSTRAINT `user_status` CHECK (status IN ('AKTIF','NONAKTIF'))");
+        DB::statement("ALTER TABLE `user_roles` ADD CONSTRAINT `research_role` CHECK (kode IN ('PASIEN_KELUARGA','PERAWAT_PEMANTAU','PERAWAT_CADANGAN','PENELITI_UTAMA','PENILAI_HASIL','ADMIN_IT'))");
+        DB::statement("ALTER TABLE `responden` ADD CONSTRAINT `participant_group` CHECK (kelompok IN ('INTERVENSI','KONTROL'))");
+        DB::statement('ALTER TABLE `responden` ADD CONSTRAINT `baseline_vas` CHECK (vas_baseline_mm BETWEEN 0 AND 100)');
+        DB::statement("ALTER TABLE `responden` ADD CONSTRAINT `participant_status` CHECK (status IN ('AKTIF','SELESAI','DROP_OUT'))");
+        DB::statement("ALTER TABLE `responden` ADD CONSTRAINT `dropout_reason` CHECK ((status = 'DROP_OUT' AND alasan_drop_out IS NOT NULL AND CHAR_LENGTH(TRIM(alasan_drop_out)) > 0) OR (status <> 'DROP_OUT' AND alasan_drop_out IS NULL))");
+        DB::statement("ALTER TABLE `participant_assignments` ADD CONSTRAINT `assignment_kind` CHECK (jenis IN ('PEMANTAU','CADANGAN'))");
+        DB::statement('ALTER TABLE `participant_assignments` ADD CONSTRAINT `assignment_dates` CHECK (berakhir_pada IS NULL OR berakhir_pada >= mulai_pada)');
+        DB::statement("ALTER TABLE `pengaturan` ADD CONSTRAINT `configuration_object` CHECK (JSON_TYPE(nilai_json) = 'OBJECT')");
+        DB::statement('ALTER TABLE `pengaturan` ADD CONSTRAINT `configuration_signoff` CHECK ((disetujui_oleh IS NULL AND disetujui_pada IS NULL AND berlaku_mulai IS NULL) OR (disetujui_oleh IS NOT NULL AND disetujui_pada IS NOT NULL AND (berlaku_mulai IS NULL OR berlaku_mulai >= disetujui_pada)))');
+        DB::statement("ALTER TABLE `questionnaire_versions` ADD CONSTRAINT `questionnaire_items` CHECK (JSON_TYPE(definisi_item) = 'ARRAY')");
+        DB::statement("ALTER TABLE `questionnaire_versions` ADD CONSTRAINT `questionnaire_scoring` CHECK (aturan_skoring IS NULL OR JSON_TYPE(aturan_skoring) = 'OBJECT')");
+        DB::statement('ALTER TABLE `questionnaire_versions` ADD CONSTRAINT `questionnaire_signoff` CHECK ((disetujui_oleh IS NULL) = (disetujui_pada IS NULL))');
+        DB::statement("ALTER TABLE `entri_harian` ADD CONSTRAINT `client_uuid` CHECK (id REGEXP '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')");
+        DB::statement("ALTER TABLE `entri_harian` ADD CONSTRAINT `intervention_entry` CHECK (kelompok = 'INTERVENSI')");
+        DB::statement('ALTER TABLE `entri_harian` ADD CONSTRAINT `entry_day` CHECK (hari_ke BETWEEN 1 AND 30)');
+        DB::statement('ALTER TABLE `entri_harian` ADD CONSTRAINT `entry_vas` CHECK (vas_mm BETWEEN 0 AND 100)');
+        DB::statement("ALTER TABLE `entri_harian` ADD CONSTRAINT `entry_type` CHECK (tipe IN ('HARIAN','ULANG'))");
+        DB::statement("ALTER TABLE `entri_harian` ADD CONSTRAINT `entry_author` CHECK (diisi_oleh IN ('PASIEN','KELUARGA'))");
+        DB::statement("ALTER TABLE `klasifikasi` ADD CONSTRAINT `classification_level` CHECK (level IN ('HIJAU','KUNING','MERAH'))");
+        DB::statement("ALTER TABLE `klasifikasi` ADD CONSTRAINT `classification_ruleset` CHECK (ruleset_key = 'classification')");
+        DB::statement("ALTER TABLE `klasifikasi` ADD CONSTRAINT `classification_triggers` CHECK (JSON_TYPE(aturan_terpicu) = 'ARRAY')");
+        DB::statement("ALTER TABLE `peringatan` ADD CONSTRAINT `alert_level` CHECK (level IN ('KUNING','MERAH'))");
+        DB::statement("ALTER TABLE `peringatan` ADD CONSTRAINT `alert_status` CHECK (status IN ('BARU','DIKONFIRMASI','DITINDAKLANJUTI','SELESAI'))");
+        DB::statement('ALTER TABLE `peringatan` ADD CONSTRAINT `alert_ack_pair` CHECK ((dikonfirmasi_oleh IS NULL) = (dikonfirmasi_pada IS NULL))');
+        DB::statement("ALTER TABLE `peringatan` ADD CONSTRAINT `alert_state_timestamps` CHECK ((status = 'BARU' AND dikonfirmasi_pada IS NULL AND selesai_pada IS NULL) OR (status IN ('DIKONFIRMASI','DITINDAKLANJUTI') AND dikonfirmasi_pada IS NOT NULL AND selesai_pada IS NULL) OR (status = 'SELESAI' AND dikonfirmasi_pada IS NOT NULL AND selesai_pada IS NOT NULL))");
+        DB::statement('ALTER TABLE `peringatan` ADD CONSTRAINT `alert_dates` CHECK ((batas_respons_pada IS NULL OR batas_respons_pada >= dibuat_pada) AND (dikonfirmasi_pada IS NULL OR dikonfirmasi_pada >= dibuat_pada) AND (selesai_pada IS NULL OR selesai_pada >= dikonfirmasi_pada))');
+        DB::statement('ALTER TABLE `tindak_lanjut` ADD CONSTRAINT `repeat_vas` CHECK (vas_ulang IS NULL OR vas_ulang BETWEEN 0 AND 100)');
+        DB::statement('ALTER TABLE `formulir_hasil` ADD CONSTRAINT `outcome_vas` CHECK (vas_hari30 IS NULL OR vas_hari30 BETWEEN 0 AND 100)');
+        DB::statement('ALTER TABLE `formulir_hasil` ADD CONSTRAINT `readmission_date` CHECK (tanggal_readmission IS NULL OR (readmission IS NOT NULL AND readmission = 1))');
+        DB::statement('ALTER TABLE `formulir_hasil` ADD CONSTRAINT `outcome_kekambuhan_a` CHECK (kekambuhan_a IS NULL OR kekambuhan_a IN (0,1))');
+        DB::statement('ALTER TABLE `formulir_hasil` ADD CONSTRAINT `outcome_kekambuhan_b` CHECK (kekambuhan_b IS NULL OR kekambuhan_b IN (0,1))');
+        DB::statement('ALTER TABLE `formulir_hasil` ADD CONSTRAINT `outcome_kekambuhan_c` CHECK (kekambuhan_c IS NULL OR kekambuhan_c IN (0,1))');
+        DB::statement('ALTER TABLE `formulir_hasil` ADD CONSTRAINT `outcome_kekambuhan_akhir` CHECK (kekambuhan_akhir IS NULL OR kekambuhan_akhir IN (0,1))');
+        DB::statement('ALTER TABLE `formulir_hasil` ADD CONSTRAINT `outcome_readmission` CHECK (readmission IS NULL OR readmission IN (0,1))');
+        DB::statement("ALTER TABLE `usability` ADD CONSTRAINT `intervention_usability` CHECK (kelompok = 'INTERVENSI')");
+        DB::statement("ALTER TABLE `usability` ADD CONSTRAINT `usability_author` CHECK (pengisi IN ('PASIEN','KELUARGA'))");
+        DB::statement("ALTER TABLE `usability` ADD CONSTRAINT `usability_answers` CHECK (JSON_TYPE(jawaban_item) = 'ARRAY')");
+        DB::statement("ALTER TABLE `audit_log` ADD CONSTRAINT `audit_metadata_keys` CHECK (metadata_redacted IS NULL OR (JSON_TYPE(metadata_redacted) = 'OBJECT' AND JSON_LENGTH(JSON_REMOVE(metadata_redacted, '$.request_id', '$.purpose_code', '$.outcome_code')) = 0))");
+        DB::statement("ALTER TABLE `audit_log` ADD CONSTRAINT `audit_metadata_tokens` CHECK (metadata_redacted IS NULL OR ((JSON_EXTRACT(metadata_redacted, '$.request_id') IS NULL OR (JSON_TYPE(JSON_EXTRACT(metadata_redacted, '$.request_id')) = 'STRING' AND JSON_UNQUOTE(JSON_EXTRACT(metadata_redacted, '$.request_id')) REGEXP '^[A-Za-z0-9_-]{1,80}$')) AND (JSON_EXTRACT(metadata_redacted, '$.purpose_code') IS NULL OR (JSON_TYPE(JSON_EXTRACT(metadata_redacted, '$.purpose_code')) = 'STRING' AND JSON_UNQUOTE(JSON_EXTRACT(metadata_redacted, '$.purpose_code')) REGEXP '^[A-Za-z0-9_-]{1,80}$')) AND (JSON_EXTRACT(metadata_redacted, '$.outcome_code') IS NULL OR (JSON_TYPE(JSON_EXTRACT(metadata_redacted, '$.outcome_code')) = 'STRING' AND JSON_UNQUOTE(JSON_EXTRACT(metadata_redacted, '$.outcome_code')) REGEXP '^[A-Za-z0-9_-]{1,80}$'))))");
+        DB::statement("ALTER TABLE `notification_deliveries` ADD CONSTRAINT `notification_channel` CHECK (channel IN ('FCM','WHATSAPP'))");
+        DB::statement("ALTER TABLE `notification_deliveries` ADD CONSTRAINT `notification_status` CHECK (status IN ('PLANNED','PENDING','SENT','FAILED','CANCELLED'))");
+        DB::statement('ALTER TABLE `notification_deliveries` ADD CONSTRAINT `notification_recipient` CHECK ((responden_id IS NOT NULL) + (pengguna_id IS NOT NULL) = 1)');
+        DB::statement("ALTER TABLE `notification_deliveries` ADD CONSTRAINT `notification_error_code` CHECK (error_code IS NULL OR error_code REGEXP '^[A-Z0-9_]{1,64}$')");
+        DB::statement("ALTER TABLE `notification_deliveries` ADD CONSTRAINT `notification_delivery_time` CHECK ((status = 'SENT' AND delivered_at IS NOT NULL AND last_attempt_at IS NOT NULL AND attempts > 0 AND delivered_at >= last_attempt_at) OR (status <> 'SENT' AND delivered_at IS NULL))");
+        DB::statement('ALTER TABLE `notification_deliveries` ADD CONSTRAINT `notification_attempts` CHECK ((attempts = 0 AND last_attempt_at IS NULL) OR (attempts > 0 AND last_attempt_at IS NOT NULL))');
+        DB::statement("ALTER TABLE `notification_deliveries` ADD CONSTRAINT `whatsapp_consent` CHECK (channel <> 'WHATSAPP' OR status IN ('PLANNED','CANCELLED') OR consent_recorded_at IS NOT NULL)");
+        DB::unprepared("CREATE TRIGGER `entri_harian_no_update` BEFORE UPDATE ON `entri_harian` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable research record'");
+        DB::unprepared("CREATE TRIGGER `entri_harian_no_delete` BEFORE DELETE ON `entri_harian` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable research record'");
+        DB::unprepared("CREATE TRIGGER `jawaban_gejala_no_update` BEFORE UPDATE ON `jawaban_gejala` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable research record'");
+        DB::unprepared("CREATE TRIGGER `jawaban_gejala_no_delete` BEFORE DELETE ON `jawaban_gejala` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable research record'");
+        DB::unprepared("CREATE TRIGGER `klasifikasi_no_update` BEFORE UPDATE ON `klasifikasi` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable research record'");
+        DB::unprepared("CREATE TRIGGER `klasifikasi_no_delete` BEFORE DELETE ON `klasifikasi` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable research record'");
+        DB::unprepared("CREATE TRIGGER `pengaturan_no_update` BEFORE UPDATE ON `pengaturan` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable research record'");
+        DB::unprepared("CREATE TRIGGER `questionnaire_versions_no_update` BEFORE UPDATE ON `questionnaire_versions` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable research record'");
+        DB::unprepared("CREATE TRIGGER `symptom_options_no_update` BEFORE UPDATE ON `symptom_options` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable research record'");
+        DB::unprepared("CREATE TRIGGER `follow_up_options_no_update` BEFORE UPDATE ON `follow_up_options` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable research record'");
+        DB::unprepared("CREATE TRIGGER `audit_log_no_update` BEFORE UPDATE ON `audit_log` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable research record'");
+        DB::unprepared("CREATE TRIGGER `audit_log_no_delete` BEFORE DELETE ON `audit_log` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable research record'");
+    }
+
+    public function down(): void
+    {
+        DB::statement('ALTER TABLE audit_log DROP CHECK audit_metadata_tokens');
+        DB::statement('ALTER TABLE peringatan DROP CHECK intervention_alert');
+        DB::statement('ALTER TABLE `notification_deliveries` DROP CHECK `whatsapp_consent`');
+        DB::statement('ALTER TABLE `notification_deliveries` DROP CHECK `notification_attempts`');
+        DB::statement('ALTER TABLE `notification_deliveries` DROP CHECK `notification_delivery_time`');
+        DB::statement('ALTER TABLE `notification_deliveries` DROP CHECK `notification_error_code`');
+        DB::statement('ALTER TABLE `notification_deliveries` DROP CHECK `notification_recipient`');
+        DB::statement('ALTER TABLE `notification_deliveries` DROP CHECK `notification_status`');
+        DB::statement('ALTER TABLE `notification_deliveries` DROP CHECK `notification_channel`');
+        DB::statement('ALTER TABLE `audit_log` DROP CHECK `audit_metadata_keys`');
+        DB::statement('ALTER TABLE `usability` DROP CHECK `usability_answers`');
+        DB::statement('ALTER TABLE `usability` DROP CHECK `usability_author`');
+        DB::statement('ALTER TABLE `usability` DROP CHECK `intervention_usability`');
+        DB::statement('ALTER TABLE `formulir_hasil` DROP CHECK `outcome_readmission`');
+        DB::statement('ALTER TABLE `formulir_hasil` DROP CHECK `outcome_kekambuhan_akhir`');
+        DB::statement('ALTER TABLE `formulir_hasil` DROP CHECK `outcome_kekambuhan_c`');
+        DB::statement('ALTER TABLE `formulir_hasil` DROP CHECK `outcome_kekambuhan_b`');
+        DB::statement('ALTER TABLE `formulir_hasil` DROP CHECK `outcome_kekambuhan_a`');
+        DB::statement('ALTER TABLE `formulir_hasil` DROP CHECK `readmission_date`');
+        DB::statement('ALTER TABLE `formulir_hasil` DROP CHECK `outcome_vas`');
+        DB::statement('ALTER TABLE `tindak_lanjut` DROP CHECK `repeat_vas`');
+        DB::statement('ALTER TABLE `peringatan` DROP CHECK `alert_dates`');
+        DB::statement('ALTER TABLE `peringatan` DROP CHECK `alert_state_timestamps`');
+        DB::statement('ALTER TABLE `peringatan` DROP CHECK `alert_ack_pair`');
+        DB::statement('ALTER TABLE `peringatan` DROP CHECK `alert_status`');
+        DB::statement('ALTER TABLE `peringatan` DROP CHECK `alert_level`');
+        DB::statement('ALTER TABLE `klasifikasi` DROP CHECK `classification_triggers`');
+        DB::statement('ALTER TABLE `klasifikasi` DROP CHECK `classification_ruleset`');
+        DB::statement('ALTER TABLE `klasifikasi` DROP CHECK `classification_level`');
+        DB::statement('ALTER TABLE `entri_harian` DROP CHECK `entry_author`');
+        DB::statement('ALTER TABLE `entri_harian` DROP CHECK `entry_type`');
+        DB::statement('ALTER TABLE `entri_harian` DROP CHECK `entry_vas`');
+        DB::statement('ALTER TABLE `entri_harian` DROP CHECK `entry_day`');
+        DB::statement('ALTER TABLE `entri_harian` DROP CHECK `intervention_entry`');
+        DB::statement('ALTER TABLE `entri_harian` DROP CHECK `client_uuid`');
+        DB::statement('ALTER TABLE `questionnaire_versions` DROP CHECK `questionnaire_signoff`');
+        DB::statement('ALTER TABLE `questionnaire_versions` DROP CHECK `questionnaire_scoring`');
+        DB::statement('ALTER TABLE `questionnaire_versions` DROP CHECK `questionnaire_items`');
+        DB::statement('ALTER TABLE `pengaturan` DROP CHECK `configuration_signoff`');
+        DB::statement('ALTER TABLE `pengaturan` DROP CHECK `configuration_object`');
+        DB::statement('ALTER TABLE `participant_assignments` DROP CHECK `assignment_dates`');
+        DB::statement('ALTER TABLE `participant_assignments` DROP CHECK `assignment_kind`');
+        DB::statement('ALTER TABLE `responden` DROP CHECK `dropout_reason`');
+        DB::statement('ALTER TABLE `responden` DROP CHECK `participant_status`');
+        DB::statement('ALTER TABLE `responden` DROP CHECK `baseline_vas`');
+        DB::statement('ALTER TABLE `responden` DROP CHECK `participant_group`');
+        DB::statement('ALTER TABLE `user_roles` DROP CHECK `research_role`');
+        DB::statement('ALTER TABLE `pengguna` DROP CHECK `user_status`');
+        DB::unprepared('DROP TRIGGER IF EXISTS `entri_harian_no_update`');
+        DB::unprepared('DROP TRIGGER IF EXISTS `entri_harian_no_delete`');
+        DB::unprepared('DROP TRIGGER IF EXISTS `jawaban_gejala_no_update`');
+        DB::unprepared('DROP TRIGGER IF EXISTS `jawaban_gejala_no_delete`');
+        DB::unprepared('DROP TRIGGER IF EXISTS `klasifikasi_no_update`');
+        DB::unprepared('DROP TRIGGER IF EXISTS `klasifikasi_no_delete`');
+        DB::unprepared('DROP TRIGGER IF EXISTS `pengaturan_no_update`');
+        DB::unprepared('DROP TRIGGER IF EXISTS `questionnaire_versions_no_update`');
+        DB::unprepared('DROP TRIGGER IF EXISTS `symptom_options_no_update`');
+        DB::unprepared('DROP TRIGGER IF EXISTS `follow_up_options_no_update`');
+        DB::unprepared('DROP TRIGGER IF EXISTS `audit_log_no_update`');
+        DB::unprepared('DROP TRIGGER IF EXISTS `audit_log_no_delete`');
+    }
+};

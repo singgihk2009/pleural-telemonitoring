@@ -10,8 +10,10 @@ placeholder screens; the API exposes infrastructure health checks only.
 - `apps/dashboard`: React + Vite + TypeScript.
 - `compose.yaml`: local MySQL 8.4, API, and dashboard.
 
-No clinical modules, patient data, authentication, FCM, WhatsApp integration, or
-production deployment are included. No application tables or seed records are created.
+PR-02 adds a [research database foundation](docs/database/README.md), models and
+synthetic test factories. No clinical engine, authentication, active FCM/WhatsApp
+integration or production deployment is included. Migrations are explicit; no
+application tables or seed records are created by Compose startup.
 
 ## Prerequisites
 
