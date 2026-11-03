@@ -32,7 +32,15 @@ return [
     |
     */
 
+    'limiter' => 'auth_limits',
+
     'stores' => [
+
+        'auth_limits' => [
+            'driver' => 'database',
+            'table' => 'auth_rate_limits',
+            'lock_table' => 'auth_rate_limit_locks',
+        ],
 
         'array' => [
             'driver' => 'array',

@@ -24,7 +24,7 @@ class CorsTest extends TestCase
         ])->options('/api/v1/health')
             ->assertNoContent()
             ->assertHeader('Access-Control-Allow-Origin', 'http://localhost:5173')
-            ->assertHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+            ->assertHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
             ->assertHeaderMissing('Access-Control-Allow-Credentials');
     }
 
