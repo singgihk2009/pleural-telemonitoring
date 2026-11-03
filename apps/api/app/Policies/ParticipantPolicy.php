@@ -14,6 +14,21 @@ class ParticipantPolicy
 {
     public function __construct(private ParticipantAccess $access) {}
 
+    public function create(Authenticatable $actor): bool
+    {
+        return $this->access->researcher($actor);
+    }
+
+    public function update(Authenticatable $actor, Participant $participant): bool
+    {
+        return $this->create($actor);
+    }
+
+    public function viewEnrollment(Authenticatable $actor, Participant $participant): bool
+    {
+        return $this->create($actor);
+    }
+
     public function view(Authenticatable $actor, Participant $participant): bool
     {
         return $this->access->canView($actor, $participant);
