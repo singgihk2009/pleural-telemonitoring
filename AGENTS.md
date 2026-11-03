@@ -1,6 +1,6 @@
 # Repository instructions
 
-## Architecture and PR-01 scope
+## Architecture and current scope
 
 Use the existing checkout; cloud tasks are already isolated. Do not create a Git
 worktree unless requested. This pnpm monorepo contains `apps/mobile` (Expo Router,
@@ -13,6 +13,13 @@ Version API routes under `/api/v1`. Preserve mobile-specific instructions in
 PR-01 covers scaffolding, placeholder screens, health endpoints, local tooling,
 API documentation and CI only. Do not add clinical modules, patient records,
 authentication, FCM, WhatsApp or production infrastructure under this scope.
+
+PR-02 explicitly authorizes additive MySQL research-schema migrations, models,
+synthetic factories, integrity tests and database documentation. See
+`docs/database/README.md` and `docs/research/requirements-v1.0.md`. Do not add a
+clinical engine, diagnosis, active notifications or real patient data. Run
+database migration tests only against a dedicated disposable test database;
+never run `migrate:fresh`, rollback or seed on an existing research database.
 
 ## Security and privacy
 
@@ -55,6 +62,6 @@ VERIFIED, distinguishing local checks from hosted GitHub Actions.
 
 Keep changes focused on the approved scope and add regression tests for changed
 behavior. Preserve user changes. Summarize changes, checks and remaining blockers
-in PR updates. For this review, push to `feature/pr-01-monorepo-bootstrap` for
-existing PR #1; do not create another PR, merge, force-push or deploy. Do not
-publish or send messages to external services unless explicitly authorized.
+in PR updates. For PR-02, push to `feature/pr-02-database-foundation` and open a
+pull request targeting `main`; do not merge, force-push or deploy. Do not publish
+or send messages to external services unless explicitly authorized.

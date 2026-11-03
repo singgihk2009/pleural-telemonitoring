@@ -38,6 +38,7 @@ jobs:
           MYSQL_USER: pleural
           MYSQL_PASSWORD: test_only
           MYSQL_ROOT_PASSWORD: root_test_only
+          MYSQL_ROOT_HOST: "%"
         ports:
           - 3306:3306
         options: >-
@@ -61,8 +62,22 @@ jobs:
       - run: composer install --no-interaction --prefer-dist
       - run: composer validate --strict
       - run: cp .env.example .env && php artisan key:generate
+      - name: Apply research migrations with the disposable schema administrator
+        run: php artisan migrate --force
+        env:
+          DB_USERNAME: root
+          DB_PASSWORD: root_test_only
       - run: composer lint
       - run: composer test
+      - name: Migration rollback and reapply in a separate empty schema
+        run: |
+          php -r '$pdo = new PDO("mysql:host=127.0.0.1", "root", "root_test_only"); $pdo->exec("CREATE DATABASE pleural_migration_test");'
+          php artisan test --filter=MigrationLifecycleTest
+        env:
+          DB_USERNAME: root
+          DB_PASSWORD: root_test_only
+          DB_DATABASE: pleural_migration_test
+          TELENAPAS_MIGRATION_TESTS: '1'
   compose:
     runs-on: ubuntu-latest
     steps:
