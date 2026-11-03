@@ -21,14 +21,23 @@ clinical engine, diagnosis, active notifications or real patient data. Run
 database migration tests only against a dedicated disposable test database;
 never run `migrate:fresh`, rollback or seed on an existing research database.
 
+PR-03 authorizes Sanctum bearer authentication, separate researcher-issued
+patient PIN credentials, six-role server policies, scoped participant reads,
+explicit identified IT access grants and safe audit events. See
+`docs/security/authentication-rbac.md`. Blinding defaults on. Never introduce a
+role-combination bypass, control-patient credentials, clinical evaluator or real
+notifications. New migrations must be additive; test authentication on MySQL,
+not a SQLite run with skipped security tests.
+
 ## Security and privacy
 
 Never commit credentials, tokens, application keys, `.env` files or generated
 artifacts. Examples must contain disposable development values only. Preserve
 TLS, package signatures and dependency verification. Keep local Compose ports
 bound to loopback. Allow CORS only for the documented dashboard origin
-`http://localhost:5173`; do not use wildcard origins or enable credentials for
-this unauthenticated bootstrap. CORS is a browser policy, not access control.
+`http://localhost:5173`; do not use wildcard origins or enable cookie
+credentials. Bearer auth permits GET/POST/DELETE/OPTIONS and Authorization.
+CORS is a browser policy, not access control.
 Do not expose exception details, connection strings or host information in
 health responses. Never log patient information or send it to external tools.
 
@@ -62,6 +71,6 @@ VERIFIED, distinguishing local checks from hosted GitHub Actions.
 
 Keep changes focused on the approved scope and add regression tests for changed
 behavior. Preserve user changes. Summarize changes, checks and remaining blockers
-in PR updates. For PR-02, push to `feature/pr-02-database-foundation` and open a
+in PR updates. For PR-03, push to `feature/pr-03-authentication-rbac` and open a
 pull request targeting `main`; do not merge, force-push or deploy. Do not publish
 or send messages to external services unless explicitly authorized.

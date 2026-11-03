@@ -1,8 +1,10 @@
 # TeleNapas database foundation (PR-02)
 
-This is an additive MySQL 8.4 schema, Laravel models and synthetic test factories.
-It adds no API endpoints, authentication policies, clinical engine, scheduled
-jobs, migrations at server startup, real data or external message senders.
+PR-02 introduced an additive MySQL 8.4 schema, Laravel models and synthetic test
+factories. PR-03 adds [authentication schema extensions](authentication-v1.1.md)
+and [server-enforced authorization](../security/authentication-rbac.md). No clinical
+engine, scheduled clinical jobs, migrations at server startup, real data or
+external message senders are included.
 
 - [Data Dictionary v1.0](data-dictionary-v1.0.md)
 - [ERD](erd.md)
@@ -30,8 +32,9 @@ metadata, nullable outcome-definition provenance, append-only triggers and
 notification-delivery metadata. No patient credentials are created: patient
 login, messages, event reports, educational content, escalation workflows and
 exports are deferred to separately scoped work. Roles/assignments are storage,
-**not implemented RBAC**; blinded-assessor and admin access still need API/query
-policies before any real data use. No such endpoints exist in this PR.
+not permission grants by themselves. PR-03 now supplies server-side policies
+and scoped reads; see its access matrix. Real data use still requires separately
+approved governance and operational controls.
 
 ## Integrity and privacy
 
