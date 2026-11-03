@@ -81,7 +81,7 @@ relationships or hidden credential fields.
 | PERAWAT_CADANGAN | Intervention participants with a currently active CADANGAN assignment | Assigned only | Assigned only | Assigned only | No inherited access to all cases |
 | PENELITI_UTAMA | Both groups | Yes | Yes (controls have no daily reports) | Both groups | Issue/revoke patient credentials; separately authorize IT |
 | PENILAI_HASIL | Both groups, projected summary | Never | Denied when blinded; pseudonymous reads when unblinded | Both groups | No credential/grant authority while blinded |
-| ADMIN_IT | None without separate grant | Separate grant only | Separate grant only | Separate grant only | Revoke staff sessions; no self-grant |
+| ADMIN_IT | CLINICAL_READ grant for summaries/list | CONTACT grant only | CLINICAL_READ grant only | CLINICAL_READ grant only | Revoke staff sessions; no self-grant; TECHNICAL grants no patient reads |
 
 Monitoring paths are `entries`, `classifications`, `alerts`, `follow-ups` beneath
 `/participants/{participant}`. Summary/list and `outcome` do not embed those
@@ -92,7 +92,7 @@ explicitly expose assessment notes. Reads generate no classification, alert or
 notification. Existing records remain subject to immutable database constraints.
 
 Deny-first rules apply across role combinations: any ADMIN_IT role still requires
-a separate participant grant even alongside PENELITI_UTAMA. Any blinded-assessor
+an explicit matching participant scope even alongside PENELITI_UTAMA. Any blinded-assessor
 role denies monitoring and credentials/grant issuance even alongside researcher
 or nurse roles. Assessors never gain contact access through another role. A
 PASIEN_KELUARGA assignment on a staff account is not a patient identity and cannot
@@ -103,10 +103,13 @@ There is no public role-assignment endpoint or self-escalation operation.
 
 Only an active, non-IT, non-blinded principal researcher can POST an
 `identified-access` grant under a participant. It names a different active
-ADMIN_IT staff account, a short purpose code and a future expiry (at most the
-configured limit, default 24 hours). Each grant covers read access to that
-participant only; no patient credential management, clinical write permissions
-or role assignment is granted. Existing assessor blinding/contact restrictions
+ADMIN_IT staff account, a short purpose code, a future expiry (at most the
+configured limit, default 24 hours), and a required nonempty `scopes` array.
+Scope values are exactly `TECHNICAL`, `CONTACT`, and `CLINICAL_READ`; duplicates,
+unknown values, missing/empty lists and non-list objects are rejected. No scope
+is inferred or assigned by default. Every grant remains participant-specific;
+no patient credential management, clinical write permissions or role assignment
+is granted. Existing assessor blinding/contact restrictions
 still win. Dates with offsets are normalized to UTC before storage.
 
 DELETE `/participants/{participant}/identified-access/{grant}` revokes it.
@@ -114,6 +117,42 @@ Expiry, revocation or loss of the approver's active/non-IT/non-blinded researche
 authority invalidates access on the next request. Approvals/access/revocations
 are audited. This is a technical mechanism for explicit authorization; it does
 not establish ethics approval or replace the research governance process.
+
+### Explicit scope boundaries (PR #3 correction)
+
+| Explicit scope | Allowed patient resources | Excluded resources |
+| --- | --- | --- |
+| TECHNICAL | None in the current patient API | Contacts, summaries/baseline, list rows/counts, monitoring, outcomes |
+| CONTACT | `/participants/{id}/contact` only | Clinical summary/list, entries, classifications, alerts, follow-ups, outcomes |
+| CLINICAL_READ | Summary/list, entries, classifications, alerts, follow-ups, outcome | Contact endpoint and embedded contact details |
+
+Scopes are independent. CONTACT+CLINICAL_READ permits both categories, subject
+to the existing role/blinding rules. Adding TECHNICAL expands neither category.
+ADMIN_IT's existing staff-session revocation operation remains a technical role
+operation; a participant TECHNICAL grant does not add patient-data permissions.
+CONTACT-only holders can address the approved contact endpoint using the supplied
+participant UUID but cannot discover clinical summaries through the list.
+
+Every clinical list/count and resource query filters participant IDs through an
+active CLINICAL_READ grant. Contact queries independently filter through CONTACT.
+Monitoring query scopes also enforce blinding, and staff-only monitoring queries
+exclude patients. Policies reject unauthorized requests before querying data;
+the resource queries independently withhold data even if a policy is accidentally
+made overly permissive. No generic “any grant exists” fallback remains.
+
+The additive scope migration never backfills historical grants. Legacy approvals
+with no scope bindings retain their metadata but authorize zero patient reads.
+A researcher must issue a new grant with explicit scopes. There is no scope-edit
+API; changing the approved set requires revocation and a new approval. Expiration,
+revocation or lost approver authority invalidates every scope under that grant.
+Separate active grants may contribute separate scopes for the same participant;
+an expired/revoked CONTACT or CLINICAL_READ grant cannot borrow validity from
+another active TECHNICAL grant or another participant's approval.
+
+Approval appends the existing grant audit event and `grant.scopes.approved`,
+whose outcome is a canonical list of fixed scope codes, not a request payload.
+Audit rows remain immutable. See the [scope Data Dictionary](../database/grant-scopes-v1.2.md)
+for schema details and the safe legacy-upgrade behavior.
 
 ## Brute-force protection and privacy
 

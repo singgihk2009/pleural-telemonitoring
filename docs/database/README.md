@@ -8,6 +8,7 @@ external message senders are included.
 
 - [Data Dictionary v1.0](data-dictionary-v1.0.md)
 - [ERD](erd.md)
+- [Explicit ADMIN_IT grant-scope dictionary v1.2](grant-scopes-v1.2.md)
 - [Versioned research requirements and approved VAS bands](../research/requirements-v1.0.md)
 
 ## Review decisions before implementation

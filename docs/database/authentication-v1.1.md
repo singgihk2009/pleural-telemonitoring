@@ -2,14 +2,15 @@
 
 Additive migration `2026_11_03_000003_create_authentication_foundation.php` builds
 on PR-02 without altering its tables, constraints or immutable audit triggers.
-The [v1.0 dictionary](data-dictionary-v1.0.md) remains the research-schema reference;
+The [explicit grant-scope amendment v1.2](grant-scopes-v1.2.md) adds mandatory
+per-capability authorization without editing this migration. The [v1.0 dictionary](data-dictionary-v1.0.md) remains the research-schema reference;
 this extension covers authentication storage only.
 
 | Table | Fields and types | Integrity / purpose |
 | --- | --- | --- |
 | patient_credentials | responden_id CHAR(36) PK; kelompok VARCHAR(16); pin_hash VARCHAR(255); issued_by BIGINT UNSIGNED; issued_at DATETIME(6); revoked_at DATETIME(6) NULL; timestamps(6) | 1:1 participant; composite participant/group FK and INTERVENSI CHECK; staff issuer FK; hash-prefix/length CHECK rejects plaintext-looking PINs. No PIN column. |
 | personal_access_tokens | id BIGINT UNSIGNED PK; tokenable_type VARCHAR(16); tokenable_id VARCHAR(36); name VARCHAR(255); token CHAR-compatible VARCHAR(64) UNIQUE; abilities TEXT NULL; last_used_at TIMESTAMP NULL; expires_at TIMESTAMP NOT NULL; timestamps | Sanctum token hashes only; stable staff/patient morph types, composite principal index and expiry index. String key handles separate BIGINT staff and UUID patient identities. |
-| identified_access_grants | id BIGINT UNSIGNED PK; pengguna_id/approved_by BIGINT UNSIGNED FKs; responden_id CHAR(36) FK; purpose_code VARCHAR(80); starts_at/expires_at DATETIME(6); revoked_at DATETIME(6) NULL; timestamps(6) | Different approver required; positive time window; ASCII uppercase purpose code; participant/user/expiry index. Policies additionally enforce active researcher approval, ADMIN_IT recipient, expiry maximum and blinding. |
+| identified_access_grants | id BIGINT UNSIGNED PK; pengguna_id/approved_by BIGINT UNSIGNED FKs; responden_id CHAR(36) FK; purpose_code VARCHAR(80); starts_at/expires_at DATETIME(6); revoked_at DATETIME(6) NULL; timestamps(6) | Different approver required; positive time window; ASCII uppercase purpose code; participant/user/expiry index. Policies additionally enforce active researcher approval, ADMIN_IT recipient, expiry maximum, explicit scope bindings and blinding. A grant alone conveys no data permission. |
 | auth_rate_limits | key VARCHAR(255) PK; value MEDIUMTEXT; expiration INT indexed | Laravel shared database-cache counters/timers. Keys contain HMACs, not respondent codes, emails or IPs. |
 | auth_rate_limit_locks | key VARCHAR(255) PK; owner VARCHAR(255); expiration INT | Database cache lock support; no credentials or clinical data. |
 

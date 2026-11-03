@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Pleural Telemonitoring Development API
-  version: 0.3.0
+  version: 0.3.1
   description: TeleNapas infrastructure health, separate staff/patient bearer authentication, and participant-scoped
     research access. No clinical engine or active notification delivery.
 servers:
@@ -198,7 +198,8 @@ paths:
       summary: List only authorized participant summaries
       description: Database scope applies before pagination and counts. Patients see themselves; nurses
         need active assignments; assessors/researchers see study summaries; IT needs an active participant-specific
-        grant.
+        grant. ADMIN_IT requires CLINICAL_READ to appear in the scoped list or counts; TECHNICAL and CONTACT
+        alone yield no participants.
       tags:
       - Participants
       security:
@@ -215,11 +216,10 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
       parameters:
-      - &id002
-        name: page
+      - name: page
         in: query
         description: Page number; page size is fixed at 25.
-        schema: &id003
+        schema:
           type: integer
           minimum: 1
   /api/v1/participants/{participant}:
@@ -227,7 +227,8 @@ paths:
       operationId: getParticipant
       summary: Read an authorized participant summary
       description: Blinded assessors do not receive group, study code or discharge date. Identity and
-        monitoring data are never embedded.
+        monitoring data are never embedded. ADMIN_IT requires an explicit CLINICAL_READ grant because
+        the summary contains baseline clinical data.
       tags:
       - Participants
       security:
@@ -246,12 +247,11 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       parameters:
-      - &id001
-        name: participant
+      - name: participant
         in: path
         required: true
         description: Opaque participant UUID. Every request is checked against current policy.
-        schema: &id005
+        schema:
           type: string
           format: uuid
   /api/v1/participants/{participant}/contact:
@@ -259,7 +259,9 @@ paths:
       operationId: getParticipantContact
       summary: Read participant contact
       description: Own patient, authorized assigned nurse, principal researcher, or separately authorized
-        IT only. Assessors are always denied. Values are decrypted only after policy authorization.
+        IT only. Assessors are always denied. Values are decrypted only after policy authorization. ADMIN_IT
+        requires explicit CONTACT; neither TECHNICAL nor CLINICAL_READ implies contact permission. CONTACT
+        alone does not grant a clinical summary or list entry.
       tags:
       - Participants
       security:
@@ -278,13 +280,20 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       parameters:
-      - *id001
+      - name: participant
+        in: path
+        required: true
+        description: Opaque participant UUID. Every request is checked against current policy.
+        schema:
+          type: string
+          format: uuid
   /api/v1/participants/{participant}/entries:
     get:
       operationId: getParticipantEntries
       summary: Read participant entries
       description: Participant monitoring read. Blinded assessors are denied even if they hold another
-        role.
+        role. ADMIN_IT requires explicit CLINICAL_READ. Neither TECHNICAL nor CONTACT implies clinical
+        access. Policies and database query scopes both enforce this boundary.
       tags:
       - Participants
       security:
@@ -303,14 +312,26 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       parameters:
-      - *id001
-      - *id002
+      - name: participant
+        in: path
+        required: true
+        description: Opaque participant UUID. Every request is checked against current policy.
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        description: Page number; page size is fixed at 25.
+        schema:
+          type: integer
+          minimum: 1
   /api/v1/participants/{participant}/classifications:
     get:
       operationId: getParticipantClassifications
       summary: Read participant classifications
       description: Stored classification history only. No classification is computed. Blinded assessors
-        are denied.
+        are denied. ADMIN_IT requires explicit CLINICAL_READ. Neither TECHNICAL nor CONTACT implies clinical
+        access. Policies and database query scopes both enforce this boundary.
       tags:
       - Participants
       security:
@@ -329,13 +350,26 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       parameters:
-      - *id001
-      - *id002
+      - name: participant
+        in: path
+        required: true
+        description: Opaque participant UUID. Every request is checked against current policy.
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        description: Page number; page size is fixed at 25.
+        schema:
+          type: integer
+          minimum: 1
   /api/v1/participants/{participant}/alerts:
     get:
       operationId: getParticipantAlerts
       summary: Read participant alerts
-      description: Staff monitoring read only; patients and blinded assessors are denied.
+      description: Staff monitoring read only; patients and blinded assessors are denied. ADMIN_IT requires
+        explicit CLINICAL_READ. Neither TECHNICAL nor CONTACT implies clinical access. Policies and database
+        query scopes both enforce this boundary.
       tags:
       - Participants
       security:
@@ -354,13 +388,26 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       parameters:
-      - *id001
-      - *id002
+      - name: participant
+        in: path
+        required: true
+        description: Opaque participant UUID. Every request is checked against current policy.
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        description: Page number; page size is fixed at 25.
+        schema:
+          type: integer
+          minimum: 1
   /api/v1/participants/{participant}/follow-ups:
     get:
       operationId: getParticipantFollowUps
       summary: Read participant follow-ups
       description: Authorized staff may read assessment notes; patients and blinded assessors are denied.
+        ADMIN_IT requires explicit CLINICAL_READ. Neither TECHNICAL nor CONTACT implies clinical access.
+        Policies and database query scopes both enforce this boundary.
       tags:
       - Participants
       security:
@@ -379,14 +426,27 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       parameters:
-      - *id001
-      - *id002
+      - name: participant
+        in: path
+        required: true
+        description: Opaque participant UUID. Every request is checked against current policy.
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        description: Page number; page size is fixed at 25.
+        schema:
+          type: integer
+          minimum: 1
   /api/v1/participants/{participant}/outcome:
     get:
       operationId: getParticipantOutcome
       summary: Read participant outcome
       description: Outcome projection for an authorized participant in either group. No contact, hospital,
-        monitoring relationship or outcome derivation is returned.
+        monitoring relationship or outcome derivation is returned. ADMIN_IT requires explicit CLINICAL_READ.
+        Neither TECHNICAL nor CONTACT implies clinical access. Policies and database query scopes both
+        enforce this boundary.
       tags:
       - Participants
       security:
@@ -405,7 +465,13 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       parameters:
-      - *id001
+      - name: participant
+        in: path
+        required: true
+        description: Opaque participant UUID. Every request is checked against current policy.
+        schema:
+          type: string
+          format: uuid
   /api/v1/participants/{participant}/credentials:
     post:
       operationId: issuePatientCredential
@@ -449,7 +515,13 @@ paths:
                   minLength: 6
                   maxLength: 6
       parameters:
-      - *id001
+      - name: participant
+        in: path
+        required: true
+        description: Opaque participant UUID. Every request is checked against current policy.
+        schema:
+          type: string
+          format: uuid
     delete:
       operationId: revokePatientCredential
       summary: Revoke patient app access
@@ -473,7 +545,13 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       parameters:
-      - *id001
+      - name: participant
+        in: path
+        required: true
+        description: Opaque participant UUID. Every request is checked against current policy.
+        schema:
+          type: string
+          format: uuid
   /api/v1/staff/{staff}/tokens:
     delete:
       operationId: revokeStaffSessions
@@ -501,14 +579,20 @@ paths:
         in: path
         required: true
         description: Staff account ID.
-        schema: *id003
+        schema:
+          type: integer
+          minimum: 1
   /api/v1/participants/{participant}/identified-access:
     post:
       operationId: grantIdentifiedAccess
       summary: Separately authorize time-limited IT access
-      description: Non-blinded principal researcher only, never self-approved or by an ADMIN_IT role combination.
-        Active ADMIN_IT recipient, one participant, mandatory purpose code and expiry no later than the
-        configured maximum (default 24 hours). Does not override assessor blinding.
+      description: An active, non-blinded, non-IT principal researcher must explicitly select one or more
+        scopes for another active ADMIN_IT account and one participant. Scopes are independent; none is
+        inferred from another. TECHNICAL permits no patient resources; CONTACT permits contact only; CLINICAL_READ
+        permits summaries, monitoring and outcomes, not contacts. No self-approval, role-combination bypass,
+        or assessor-blinding override. Expiry is mandatory and no later than the configured maximum (default
+        24 hours). Missing/empty/unknown/duplicate scopes are rejected. Legacy unscoped grants authorize
+        no data.
       tags:
       - Access management
       security:
@@ -539,16 +623,32 @@ paths:
               - staff_id
               - purpose_code
               - expires_at
+              - scopes
               properties:
-                staff_id: *id003
+                staff_id:
+                  type: integer
+                  minimum: 1
                 purpose_code:
                   type: string
                   pattern: ^[A-Z0-9_]{1,80}$
-                expires_at: &id004
+                expires_at:
                   type: string
                   format: date-time
+                scopes:
+                  type: array
+                  minItems: 1
+                  maxItems: 3
+                  uniqueItems: true
+                  items:
+                    $ref: '#/components/schemas/AccessGrantScope'
       parameters:
-      - *id001
+      - name: participant
+        in: path
+        required: true
+        description: Opaque participant UUID. Every request is checked against current policy.
+        schema:
+          type: string
+          format: uuid
   /api/v1/participants/{participant}/identified-access/{grant}:
     delete:
       operationId: revokeIdentifiedAccess
@@ -573,12 +673,20 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       parameters:
-      - *id001
+      - name: participant
+        in: path
+        required: true
+        description: Opaque participant UUID. Every request is checked against current policy.
+        schema:
+          type: string
+          format: uuid
       - name: grant
         in: path
         required: true
         description: Access grant ID within this participant.
-        schema: *id003
+        schema:
+          type: integer
+          minimum: 1
 components:
   schemas:
     ReadyHealth:
@@ -644,7 +752,9 @@ components:
         access_token:
           type: string
           description: Returned once. Store in platform secure storage; never log or use localStorage.
-        expires_at: *id004
+        expires_at:
+          type: string
+          format: date-time
     Identity:
       type: object
       additionalProperties: false
@@ -679,14 +789,16 @@ components:
       - status
       - vas_baseline_mm
       properties:
-        id: *id005
+        id:
+          type: string
+          format: uuid
         status:
           type: string
           enum:
           - AKTIF
           - SELESAI
           - DROP_OUT
-        vas_baseline_mm: &id006
+        vas_baseline_mm:
           type: integer
           minimum: 0
           maximum: 100
@@ -698,7 +810,9 @@ components:
           enum:
           - INTERVENSI
           - KONTROL
-        tanggal_pulang: *id004
+        tanggal_pulang:
+          type: string
+          format: date-time
       description: Blinded assessors do not receive kode, kelompok or tanggal_pulang; no monitoring relationships
         or contacts are embedded.
     Contact:
@@ -731,13 +845,20 @@ components:
       - vas_mm
       - tipe
       properties:
-        id: *id005
-        responden_id: *id005
+        id:
+          type: string
+          format: uuid
+        responden_id:
+          type: string
+          format: uuid
         hari_ke:
           type: integer
           minimum: 1
           maximum: 30
-        vas_mm: *id006
+        vas_mm:
+          type: integer
+          minimum: 0
+          maximum: 100
         tipe:
           type: string
           enum:
@@ -752,8 +873,12 @@ components:
       - level
       - ruleset_version
       properties:
-        id: *id003
-        entri_id: *id005
+        id:
+          type: integer
+          minimum: 1
+        entri_id:
+          type: string
+          format: uuid
         level:
           type: string
           enum:
@@ -772,8 +897,12 @@ components:
       - status
       - dibuat_pada
       properties:
-        id: *id005
-        responden_id: *id005
+        id:
+          type: string
+          format: uuid
+        responden_id:
+          type: string
+          format: uuid
         level:
           type: string
           enum:
@@ -786,7 +915,9 @@ components:
           - DIKONFIRMASI
           - DITINDAKLANJUTI
           - SELESAI
-        dibuat_pada: *id004
+        dibuat_pada:
+          type: string
+          format: date-time
     FollowUp:
       type: object
       additionalProperties: false
@@ -798,9 +929,15 @@ components:
       - hasil_asesmen
       - vas_ulang
       properties:
-        id: *id005
-        peringatan_id: *id005
-        waktu: *id004
+        id:
+          type: string
+          format: uuid
+        peringatan_id:
+          type: string
+          format: uuid
+        waktu:
+          type: string
+          format: date-time
         keputusan:
           type: string
         hasil_asesmen:
@@ -809,7 +946,9 @@ components:
           - type: 'null'
         vas_ulang:
           oneOf:
-          - *id006
+          - type: integer
+            minimum: 0
+            maximum: 100
           - type: 'null'
     Outcome:
       type: object
@@ -823,10 +962,14 @@ components:
       - kekambuhan_akhir
       - readmission
       properties:
-        id: *id005
+        id:
+          type: string
+          format: uuid
         vas_hari30:
           oneOf:
-          - *id006
+          - type: integer
+            minimum: 0
+            maximum: 100
           - type: 'null'
         kekambuhan_a:
           oneOf:
@@ -856,8 +999,12 @@ components:
       - last_page
       - total
       properties:
-        current_page: *id003
-        last_page: *id003
+        current_page:
+          type: integer
+          minimum: 1
+        last_page:
+          type: integer
+          minimum: 1
         total:
           type: integer
           minimum: 0
@@ -974,9 +1121,30 @@ components:
           required:
           - id
           - expires_at
+          - scopes
           properties:
-            id: *id003
-            expires_at: *id004
+            id:
+              type: integer
+              minimum: 1
+            expires_at:
+              type: string
+              format: date-time
+            scopes:
+              type: array
+              minItems: 1
+              maxItems: 3
+              uniqueItems: true
+              items:
+                $ref: '#/components/schemas/AccessGrantScope'
+    AccessGrantScope:
+      type: string
+      enum:
+      - TECHNICAL
+      - CONTACT
+      - CLINICAL_READ
+      description: Independent, explicitly approved scope. TECHNICAL grants no patient-resource reads;
+        CONTACT permits contact only; CLINICAL_READ permits summary/list, monitoring and outcomes without
+        contact. Existing role/blinding restrictions still apply.
   securitySchemes:
     bearerAuth:
       type: http

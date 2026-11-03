@@ -1,5 +1,9 @@
 # PR-03 test report
 
+For the later ADMIN_IT scope correction, see the
+[scope validation report](validation-grant-scopes.md). These original results
+below describe the initial PR-03 implementation.
+
 Local validation on 3 November 2026 (Asia/Jakarta), using PHP 8.4, MySQL 8.4,
 Node 24, pnpm 10.28.2 and locked Sanctum 4.3.3. No real patient data was used.
 

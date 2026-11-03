@@ -2,12 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Auth\AccessGrantScope;
 use App\Auth\ParticipantAccess;
 use App\Auth\SecurityAudit;
+use App\Models\Alert;
 use App\Models\ClassificationRecord;
+use App\Models\DailyEntry;
 use App\Models\FollowUp;
+use App\Models\Outcome;
 use App\Models\Participant;
+use App\Models\ParticipantContact;
 use App\Models\StaffUser;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
@@ -24,6 +30,7 @@ class ParticipantController extends Controller
     public function show(Request $request, Participant $participant): mixed
     {
         Gate::authorize('view', $participant);
+        $participant = app(ParticipantAccess::class)->visible($request->user(), Participant::query())->whereKey($participant->id)->firstOrFail();
         $this->audit($request, $participant);
 
         return response()->json(['data' => $this->summary($request, $participant)]);
@@ -32,7 +39,7 @@ class ParticipantController extends Controller
     public function contact(Request $request, Participant $participant): mixed
     {
         Gate::authorize('viewContact', $participant);
-        $contact = $participant->contact;
+        $contact = ParticipantContact::where('responden_id', $participant->id)->whereIn('responden_id', app(ParticipantAccess::class)->visible($request->user(), Participant::query(), AccessGrantScope::Contact)->select('id'))->first();
         $this->audit($request, $participant);
 
         return response()->json(['data' => $contact ? ['initials' => $contact->inisial_encrypted, 'patient_contact' => $contact->no_hp_pasien_encrypted, 'family_contact' => $contact->no_hp_keluarga_encrypted] : null]);
@@ -43,7 +50,7 @@ class ParticipantController extends Controller
         Gate::authorize('viewMonitoring', $participant);
         $this->audit($request, $participant);
 
-        return $this->page($participant->entries()->select(['id', 'responden_id', 'hari_ke', 'vas_mm', 'tipe'])->orderBy('tanggal_wib')->paginate(25));
+        return $this->page(DailyEntry::where('responden_id', $participant->id)->whereIn('responden_id', $this->monitoringIds($request))->select(['id', 'responden_id', 'hari_ke', 'vas_mm', 'tipe'])->orderBy('tanggal_wib')->paginate(25));
     }
 
     public function classifications(Request $request, Participant $participant): mixed
@@ -51,7 +58,7 @@ class ParticipantController extends Controller
         Gate::authorize('viewMonitoring', $participant);
         $this->audit($request, $participant);
 
-        return $this->page(ClassificationRecord::whereHas('entry', fn ($entry) => $entry->where('responden_id', $participant->id))->select(['id', 'entri_id', 'level', 'ruleset_version'])->orderBy('id')->paginate(25));
+        return $this->page(ClassificationRecord::whereHas('entry', fn ($entry) => $entry->where('responden_id', $participant->id)->whereIn('responden_id', $this->monitoringIds($request)))->select(['id', 'entri_id', 'level', 'ruleset_version'])->orderBy('id')->paginate(25));
     }
 
     public function alerts(Request $request, Participant $participant): mixed
@@ -59,14 +66,14 @@ class ParticipantController extends Controller
         Gate::authorize('viewFollowUps', $participant);
         $this->audit($request, $participant);
 
-        return $this->page($participant->alerts()->select(['id', 'responden_id', 'level', 'status', 'dibuat_pada'])->orderBy('id')->paginate(25));
+        return $this->page(Alert::where('responden_id', $participant->id)->whereIn('responden_id', $this->monitoringIds($request, true))->select(['id', 'responden_id', 'level', 'status', 'dibuat_pada'])->orderBy('id')->paginate(25));
     }
 
     public function followUps(Request $request, Participant $participant): mixed
     {
         Gate::authorize('viewFollowUps', $participant);
         $this->audit($request, $participant);
-        $records = FollowUp::whereHas('alert', fn ($alert) => $alert->where('responden_id', $participant->id))->orderBy('id')->paginate(25);
+        $records = FollowUp::whereHas('alert', fn ($alert) => $alert->where('responden_id', $participant->id)->whereIn('responden_id', $this->monitoringIds($request, true)))->orderBy('id')->paginate(25);
 
         // Explicit projection: never serialize arbitrary loaded Eloquent relationships.
         return $this->page($records, fn (FollowUp $row) => ['id' => $row->id, 'peringatan_id' => $row->peringatan_id, 'waktu' => $row->waktu->toISOString(), 'keputusan' => $row->keputusan, 'hasil_asesmen' => $row->hasil_asesmen, 'vas_ulang' => $row->vas_ulang]);
@@ -76,9 +83,14 @@ class ParticipantController extends Controller
     {
         Gate::authorize('view', $participant);
         $this->audit($request, $participant);
-        $outcome = $participant->outcome;
+        $outcome = Outcome::where('responden_id', $participant->id)->whereIn('responden_id', app(ParticipantAccess::class)->visible($request->user(), Participant::query())->select('id'))->first();
 
         return response()->json(['data' => $outcome ? $outcome->only(['id', 'vas_hari30', 'kekambuhan_a', 'kekambuhan_b', 'kekambuhan_c', 'kekambuhan_akhir', 'readmission']) : null]);
+    }
+
+    private function monitoringIds(Request $request, bool $staffOnly = false): Builder
+    {
+        return app(ParticipantAccess::class)->monitoringVisible($request->user(), Participant::query(), $staffOnly)->select('id');
     }
 
     private function summary(Request $request, Participant $participant): array

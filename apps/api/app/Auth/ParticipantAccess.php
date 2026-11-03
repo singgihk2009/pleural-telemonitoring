@@ -22,8 +22,12 @@ class ParticipantAccess
         return $actor instanceof StaffUser && $actor->status === 'AKTIF' && ! $this->blinded($actor) && ! $actor->hasRole(ResearchRoleCode::Administrator) && $actor->hasRole(ResearchRoleCode::Researcher);
     }
 
-    public function visible(Authenticatable $actor, Builder $query): Builder
+    public function visible(Authenticatable $actor, Builder $query, AccessGrantScope $scope = AccessGrantScope::ClinicalRead): Builder
     {
+        // TECHNICAL is never a patient-data read capability. Contact is independently scoped.
+        if ($scope === AccessGrantScope::Technical || ($scope === AccessGrantScope::Contact && $actor instanceof StaffUser && $actor->hasRole(ResearchRoleCode::Assessor))) {
+            return $query->whereRaw('1 = 0');
+        }
         if ($actor instanceof PatientCredential) {
             if ($actor->revoked_at !== null) {
                 return $query->whereRaw('1 = 0');
@@ -35,7 +39,7 @@ class ParticipantAccess
             return $query->whereRaw('1 = 0');
         }
         if ($actor->hasRole(ResearchRoleCode::Administrator)) {
-            return $query->whereIn('id', $this->grants($actor)->select('responden_id'));
+            return $query->whereIn('id', $this->grants($actor, $scope)->select('responden_id'));
         }
         if ($actor->hasRole(ResearchRoleCode::Researcher) || $actor->hasRole(ResearchRoleCode::Assessor)) {
             return $query;
@@ -53,14 +57,24 @@ class ParticipantAccess
             ->where('mulai_pada', '<=', now()->format('Y-m-d H:i:s.u'))->where(fn (Builder $end) => $end->whereNull('berakhir_pada')->orWhere('berakhir_pada', '>', now()->format('Y-m-d H:i:s.u'))));
     }
 
-    public function canView(Authenticatable $actor, Participant $participant): bool
+    public function monitoringVisible(Authenticatable $actor, Builder $query, bool $staffOnly = false): Builder
     {
-        return $this->visible($actor, Participant::query())->whereKey($participant->id)->exists();
+        if ($this->blinded($actor) || ($staffOnly && $actor instanceof PatientCredential)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $this->visible($actor, $query, AccessGrantScope::ClinicalRead);
     }
 
-    public function grants(StaffUser $actor): Builder
+    public function canView(Authenticatable $actor, Participant $participant, AccessGrantScope $scope = AccessGrantScope::ClinicalRead): bool
+    {
+        return $this->visible($actor, Participant::query(), $scope)->whereKey($participant->id)->exists();
+    }
+
+    public function grants(StaffUser $actor, AccessGrantScope $scope): Builder
     {
         return IdentifiedAccessGrant::query()->where('pengguna_id', $actor->id)->whereNull('revoked_at')
+            ->whereHas('scopes', fn (Builder $binding) => $binding->where('scope', $scope->value))
             ->where('starts_at', '<=', now()->format('Y-m-d H:i:s.u'))->where('expires_at', '>', now()->format('Y-m-d H:i:s.u'))
             // A disabled approver or revoked researcher role invalidates outstanding grants.
             ->whereHas('approver', fn (Builder $staff) => $staff->where('status', 'AKTIF')

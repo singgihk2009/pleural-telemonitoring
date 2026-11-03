@@ -207,7 +207,7 @@ class AuthenticationAuthorizationTest extends TestCase
             $this->callAs($token, 'GET', '/participants/'.$participant->id.$path)->assertForbidden();
         }
         $this->callAs($token, 'GET', '/participants')->assertOk()->assertJsonCount(0, 'data');
-        $this->callAs($token, 'POST', '/participants/'.$participant->id.'/identified-access', ['staff_id' => $admin->id, 'purpose_code' => 'SYNTHETIC_TEST', 'expires_at' => now()->addHour()->toISOString()])->assertForbidden();
+        $this->callAs($token, 'POST', '/participants/'.$participant->id.'/identified-access', ['staff_id' => $admin->id, 'scopes' => ['CONTACT', 'CLINICAL_READ'], 'purpose_code' => 'SYNTHETIC_TEST', 'expires_at' => now()->addHour()->toISOString()])->assertForbidden();
         $this->callAs($token, 'POST', '/participants/'.$participant->id.'/credentials', ['pin' => '012345'])->assertForbidden();
     }
 
@@ -220,7 +220,7 @@ class AuthenticationAuthorizationTest extends TestCase
         ParticipantContact::factory()->create(['responden_id' => $participant->id]);
         $rToken = $this->token($researcher);
         $aToken = $this->token($admin);
-        $grant = $this->callAs($rToken, 'POST', '/participants/'.$participant->id.'/identified-access', ['staff_id' => $admin->id, 'purpose_code' => 'SYNTHETIC_TEST', 'expires_at' => now()->addMinutes(10)->setTimezone('Asia/Jakarta')->format('Y-m-d\TH:i:sP')])->assertCreated()->json('data.id');
+        $grant = $this->callAs($rToken, 'POST', '/participants/'.$participant->id.'/identified-access', ['staff_id' => $admin->id, 'scopes' => ['CONTACT', 'CLINICAL_READ'], 'purpose_code' => 'SYNTHETIC_TEST', 'expires_at' => now()->addMinutes(10)->setTimezone('Asia/Jakarta')->format('Y-m-d\TH:i:sP')])->assertCreated()->json('data.id');
         $this->callAs($aToken, 'GET', '/participants/'.$participant->id.'/contact')->assertOk()->assertJsonPath('data.patient_contact', 'SYNTHETIC-NOT-A-PHONE');
         $this->callAs($aToken, 'GET', '/participants/'.$other->id.'/contact')->assertForbidden();
         $this->callAs($aToken, 'GET', '/participants')->assertJsonCount(1, 'data');
@@ -390,8 +390,8 @@ class AuthenticationAuthorizationTest extends TestCase
         $participant = Participant::factory()->create();
         $piToken = $this->token($pi);
         $adminToken = $this->token($admin);
-        $this->callAs($piToken, 'POST', '/participants/'.$participant->id.'/identified-access', ['staff_id' => $admin->id, 'purpose_code' => 'SYNTHETIC_TEST', 'expires_at' => now()->addDays(2)->toISOString()])->assertUnprocessable();
-        $this->callAs($piToken, 'POST', '/participants/'.$participant->id.'/identified-access', ['staff_id' => $admin->id, 'purpose_code' => 'SYNTHETIC_TEST', 'expires_at' => now()->addHour()->toISOString()])->assertCreated();
+        $this->callAs($piToken, 'POST', '/participants/'.$participant->id.'/identified-access', ['staff_id' => $admin->id, 'scopes' => ['CONTACT', 'CLINICAL_READ'], 'purpose_code' => 'SYNTHETIC_TEST', 'expires_at' => now()->addDays(2)->toISOString()])->assertUnprocessable();
+        $this->callAs($piToken, 'POST', '/participants/'.$participant->id.'/identified-access', ['staff_id' => $admin->id, 'scopes' => ['CONTACT', 'CLINICAL_READ'], 'purpose_code' => 'SYNTHETIC_TEST', 'expires_at' => now()->addHour()->toISOString()])->assertCreated();
         $this->callAs($adminToken, 'GET', '/participants/'.$participant->id)->assertOk()->assertJsonMissingPath('data.kelompok');
         foreach (['entries', 'classifications', 'alerts', 'follow-ups', 'contact'] as $resource) {
             $this->callAs($adminToken, 'GET', '/participants/'.$participant->id.'/'.$resource)->assertForbidden();

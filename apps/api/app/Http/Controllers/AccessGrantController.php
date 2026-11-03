@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Auth\AccessGrantScope;
 use App\Auth\ResearchRoleCode;
 use App\Auth\SecurityAudit;
 use App\Models\IdentifiedAccessGrant;
@@ -11,6 +12,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 class AccessGrantController extends Controller
 {
@@ -19,6 +21,8 @@ class AccessGrantController extends Controller
         Gate::authorize('grantIdentifiedAccess', $participant);
         $data = $request->validate([
             'staff_id' => ['required', 'integer'],
+            'scopes' => ['required', 'array', 'list', 'min:1', 'max:3'],
+            'scopes.*' => ['required', 'string', 'distinct:strict', Rule::enum(AccessGrantScope::class)],
             'purpose_code' => ['required', 'string', 'regex:/\A[A-Z0-9_]{1,80}\z/'],
             'expires_at' => ['required', 'date', 'after:now', 'before_or_equal:'.now()->addHours(config('research_auth.grant_max_hours'))->toISOString()],
         ]);
@@ -31,9 +35,14 @@ class AccessGrantController extends Controller
                 'approved_by' => $request->user()->id, 'purpose_code' => $data['purpose_code'],
                 'starts_at' => now(), 'expires_at' => CarbonImmutable::parse($data['expires_at'])->utc(),
             ]);
+            $scopes = collect($data['scopes'])->sort()->values()->all();
+            foreach ($scopes as $scope) {
+                $grant->scopes()->create(['scope' => $scope]);
+            }
+            app(SecurityAudit::class)->record($request, 'grant.scopes.approved', implode('_', $scopes), (string) $grant->id);
             app(SecurityAudit::class)->record($request, 'identified.access.granted', 'SUCCESS', $participant->id);
 
-            return response()->json(['data' => ['id' => $grant->id, 'expires_at' => $grant->expires_at->toISOString()]], 201);
+            return response()->json(['data' => ['id' => $grant->id, 'scopes' => $scopes, 'expires_at' => $grant->expires_at->toISOString()]], 201);
         });
     }
 

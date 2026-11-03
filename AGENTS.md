@@ -27,7 +27,9 @@ explicit identified IT access grants and safe audit events. See
 `docs/security/authentication-rbac.md`. Blinding defaults on. Never introduce a
 role-combination bypass, control-patient credentials, clinical evaluator or real
 notifications. New migrations must be additive; test authentication on MySQL,
-not a SQLite run with skipped security tests.
+not a SQLite run with skipped security tests. ADMIN_IT needs explicit CONTACT
+for contacts and CLINICAL_READ for summaries, monitoring and outcomes. TECHNICAL
+and legacy unscoped grants permit no patient reads; scopes never imply others.
 
 ## Security and privacy
 
@@ -71,6 +73,6 @@ VERIFIED, distinguishing local checks from hosted GitHub Actions.
 
 Keep changes focused on the approved scope and add regression tests for changed
 behavior. Preserve user changes. Summarize changes, checks and remaining blockers
-in PR updates. For PR-03, push to `feature/pr-03-authentication-rbac` and open a
-pull request targeting `main`; do not merge, force-push or deploy. Do not publish
+in PR updates. For existing PR #3, push to `feature/pr-03-authentication-rbac`;
+do not create another PR, merge, force-push or deploy. Do not publish
 or send messages to external services unless explicitly authorized.

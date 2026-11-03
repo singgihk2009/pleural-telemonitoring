@@ -21,7 +21,10 @@ retention and export governance are not inferred or activated.
   date. Outcome projections remain available for both groups without identity.
 - AUTH-07: IT administration is not clinical authority. Identified read access
   requires a different principal researcher's explicit participant-specific,
-  expiring grant, and cannot override assessor restrictions. No self-approval
+  expiring grant with explicit CONTACT and/or CLINICAL_READ scopes, and cannot
+  override assessor restrictions. TECHNICAL authorizes no patient reads. Neither
+  CONTACT nor CLINICAL_READ implies the other; legacy unscoped grants deny all
+  patient resources and clinical list counts. No self-approval
   or role-combination bypass is allowed.
 - AUTH-08: every protected endpoint authenticates first; explicit response
   projections and pre-pagination query scopes prevent relationship/count leaks.

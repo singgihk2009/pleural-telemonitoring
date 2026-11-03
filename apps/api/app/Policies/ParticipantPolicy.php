@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Auth\AccessGrantScope;
 use App\Auth\ParticipantAccess;
 use App\Auth\ResearchRoleCode;
 use App\Models\Participant;
@@ -25,7 +26,7 @@ class ParticipantPolicy
 
     public function viewContact(Authenticatable $actor, Participant $participant): bool
     {
-        return ! ($actor instanceof StaffUser && $actor->hasRole(ResearchRoleCode::Assessor)) && $this->view($actor, $participant);
+        return ! ($actor instanceof StaffUser && $actor->hasRole(ResearchRoleCode::Assessor)) && $this->access->canView($actor, $participant, AccessGrantScope::Contact);
     }
 
     public function viewFollowUps(Authenticatable $actor, Participant $participant): bool
