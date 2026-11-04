@@ -1,7 +1,7 @@
 # Pleural Telemonitoring
 
-PR-01 establishes a development monorepo. The mobile app and dashboard contain
-placeholder screens; the API exposes infrastructure health checks only.
+TeleNapas is a research development monorepo with a Laravel API, researcher
+dashboard and Android patient interface. PR-01 established the original scaffold.
 
 ## Repository
 
@@ -15,6 +15,8 @@ synthetic test factories. PR-03 adds [authentication and RBAC](docs/security/aut
 with Sanctum bearer tokens, separate hashed patient PINs and participant-scoped
 policies. PR-04 adds [research enrollment and baseline management](docs/enrollment/README.md)
 with a researcher dashboard, validated forms, encrypted contacts and safe audit.
+PR-05 adds the [Android patient interface](docs/mobile/PR-05.md), secure patient
+login and explicitly unavailable placeholders for unapproved backend workflows.
 No clinical engine, active FCM/WhatsApp integration or production
 deployment is included. Migrations are explicit; no
 application tables or seed records are created by Compose startup.
@@ -24,8 +26,8 @@ application tables or seed records are created by Compose startup.
 Node.js 24, pnpm 10.28.2 (see `packageManager`), and Docker with Compose v2.
 For a host-run API, install PHP 8.4 with mbstring, PDO MySQL/SQLite, DOM/XML and zip,
 and Composer 2. Native Android builds additionally require Android Studio/SDK;
-iOS native builds require macOS/Xcode. Expo Go can run the development placeholder
-on a compatible device; an emulator/device check is separate from the JS export.
+iOS native builds require macOS/Xcode. A compatible SDK 58 Expo Go runtime can run the patient development UI;
+emulator/device checks are separate from JavaScript export and standalone APK verification.
 
 ## Quick start
 
@@ -48,8 +50,11 @@ pnpm dev:mobile
 `GET /up` checks Laravel liveness. `GET /api/v1/health` runs `SELECT 1` against MySQL
 and returns `{"status":"ok","database":"connected"}`; database query failures
 return HTTP 503 with `{"status":"unavailable","database":"disconnected"}`.
-There are no authenticated or clinical endpoints. Mobile is run on the host so the Expo QR code/device connection works normally. The apps
-are not yet connected to the API.
+Mobile runs on the host so the Expo QR code/device connection works normally.
+The dashboard uses staff authentication and enrollment APIs; mobile uses patient
+authentication and its authorized profile endpoint. Configure the non-secret
+`EXPO_PUBLIC_API_BASE_URL` as described in the mobile guide. Research schemas and
+synthetic test credentials must be provisioned explicitly; startup does not seed them.
 
 All published Compose ports bind to loopback. Database credentials in Compose and
 `.env.example` are disposable local defaults. Never use them in production or
@@ -123,3 +128,6 @@ origins are deliberately not allowed. Vite uses port 5173 with strict port
 selection so it cannot silently move to an unapproved origin. CORS does not
 protect the API from non-browser clients and is not authentication. This policy
 is for the local bootstrap; production configuration is outside PR-01.
+
+PR-05 patient UI scope, reference comparison and verification boundaries:
+[Android patient interface](docs/mobile/PR-05.md).

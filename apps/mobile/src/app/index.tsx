@@ -1,1 +1,1 @@
-export { default } from '../../DevelopmentScreen';
+export { EntryScreen as default } from '../patient/screens';
