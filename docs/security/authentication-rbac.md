@@ -222,3 +222,9 @@ explicitly skips these MySQL security/integrity tests and is not security eviden
 PR-04 adds researcher-only enrollment routes. Existing ADMIN_IT read grants do
 not authorize enrollment, baseline edits, status changes or enrollment searches.
 See its [access and integrity rules](../enrollment/README.md).
+
+PR-04 enrollment access denies every PENILAI_HASIL role combination regardless of
+`AUTH_BLINDED_ASSESSMENT`, including PENILAI_HASIL + PENELITI_UTAMA. Create,
+show, update and search share this restriction. Editor serialization additionally
+authorizes `viewContact` before loading/decrypting contacts. Existing contact
+policy/query restrictions and ADMIN_IT scope requirements remain unchanged.

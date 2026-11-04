@@ -138,6 +138,67 @@ class ResearchEnrollmentTest extends TestCase
         ];
     }
 
+    #[DataProvider('assessorRoleCombinations')]
+    public function test_assessor_contacts_are_denied_independently_of_blinding(bool $blinded, array $roles): void
+    {
+        config(['research_auth.blinded_assessment' => $blinded]);
+        $actor = $this->staff(...$roles);
+        $participant = Participant::factory()->create();
+        $contact = ParticipantContact::factory()->create(['responden_id' => $participant->id]);
+        // Invalid ciphertext makes an accidental decryption fail instead of returning 403.
+        DB::table((new ParticipantContact)->getTable())->where('responden_id', $participant->id)->update([
+            'inisial_encrypted' => 'SYNTHETIC-INVALID-CIPHERTEXT',
+            'no_hp_pasien_encrypted' => 'SYNTHETIC-INVALID-CIPHERTEXT',
+            'no_hp_keluarga_encrypted' => 'SYNTHETIC-INVALID-CIPHERTEXT',
+        ]);
+        $beforeContact = $contact->fresh()->getRawOriginal();
+        $count = Participant::count();
+        $this->assertDenied($actor, $participant, 403);
+        $this->callAs($actor, 'POST', '/participants', $this->input() + ['contact' => ['initials' => 'SYN']])->assertForbidden();
+        $this->callAs($actor, 'PATCH', '/participants/'.$participant->id, ['contact' => ['initials' => 'SYN']] + $this->version($participant))->assertForbidden();
+        $this->assertSame($count, Participant::count());
+        $this->assertSame($beforeContact, $contact->fresh()->getRawOriginal());
+
+        Auth::forgetGuards();
+        $token = $actor->createToken('synthetic-alternative-contact-test', ['api'], now()->addHour())->plainTextToken;
+        $headers = ['Authorization' => 'Bearer '.$token];
+        $this->getJson('/api/v1/participants/'.$participant->id.'/contact', $headers)->assertForbidden();
+        foreach (['/api/v1/participants', '/api/v1/participants/'.$participant->id] as $path) {
+            $response = $this->getJson($path, $headers)->assertOk();
+            $this->assertStringNotContainsString('encrypted', $response->getContent());
+            $this->assertStringNotContainsString('contact', $response->getContent());
+        }
+    }
+
+    public static function assessorRoleCombinations(): array
+    {
+        $cases = [];
+        foreach ([true, false] as $blinded) {
+            foreach ([[ResearchRoleCode::Assessor], [ResearchRoleCode::Assessor, ResearchRoleCode::Researcher], [ResearchRoleCode::Assessor, ResearchRoleCode::Researcher, ResearchRoleCode::Nurse]] as $roles) {
+                $cases[] = [$blinded, $roles];
+            }
+        }
+
+        return $cases;
+    }
+
+    #[DataProvider('blindingModes')]
+    public function test_non_assessor_researcher_retains_contact_editor_access(bool $blinded): void
+    {
+        config(['research_auth.blinded_assessment' => $blinded]);
+        $actor = $this->staff(ResearchRoleCode::Researcher);
+        $created = $this->callAs($actor, 'POST', '/participants', $this->input() + ['contact' => ['initials' => 'SYN']])->assertCreated()->assertJsonPath('data.contact.initials', 'SYN');
+        $participant = Participant::findOrFail($created->json('data.id'));
+        $this->callAs($actor, 'GET', '/participants/'.$participant->id)->assertOk()->assertJsonPath('data.contact.initials', 'SYN');
+        $this->callAs($actor, 'PATCH', '/participants/'.$participant->id, ['contact' => ['initials' => 'SYN-EDIT']] + $this->version($participant))->assertOk()->assertJsonPath('data.contact.initials', 'SYN-EDIT');
+        $this->callAs($actor, 'POST', '/participants/search')->assertOk()->assertJsonMissingPath('data.0.contact');
+    }
+
+    public static function blindingModes(): array
+    {
+        return [[true], [false]];
+    }
+
     public function test_patients_and_unauthenticated_requests_cannot_change_or_read_enrollment(): void
     {
         $credential = PatientCredential::factory()->create();

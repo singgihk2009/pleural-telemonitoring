@@ -200,6 +200,8 @@ class EnrollmentController extends Controller
         $data['tanggal_consent'] = $participant->tanggal_consent->toDateString();
         $data['updated_at'] = $participant->updated_at?->toISOString();
         if ($editor) {
+            // Authorize before loading the relationship or reading encrypted casts.
+            Gate::authorize('viewContact', $participant);
             $contact = $participant->contact;
             $data['alasan_drop_out'] = $participant->alasan_drop_out;
             $data['baseline_locked'] = $this->history($participant);

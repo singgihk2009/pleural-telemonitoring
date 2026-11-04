@@ -67,3 +67,27 @@ summary metrics.
   confirm server revocation; the dashboard warns explicitly.
 - No patient credential issuance UI, clinical classification, automatic alert,
   messaging integration, real patient data, deployment or automatic merge.
+
+
+## P1 assessor-contact correction (2026-11-04)
+
+Enrollment policies now unconditionally deny PENILAI_HASIL, including combined
+researcher/nurse roles with blinding disabled. All five enrollment endpoints use
+this deny-first rule. The shared editor resource also authorizes `viewContact`
+before loading the contact relationship or accessing encrypted casts. Search
+continues omitting contacts. Existing contact policy/query restrictions, IT grant
+scopes, encryption and immutable audit behavior are unchanged.
+
+Eight new MySQL cases verify both blinding modes, assessor role combinations,
+alternative contact/summary routes, no unauthorized writes, and continued
+non-assessor researcher create/show/update/list functionality. Invalid synthetic
+ciphertext makes unintended decryption observable without using patient data.
+
+Local checks for this correction: full API **163 passed / 1,373 assertions**;
+three opt-in checks skipped there and separately passed in new disposable schemas
+(lifecycle 11, authentication upgrade 13, grant-scope upgrade 19 assertions).
+Dashboard **13 passed**, mobile **2 passed**; Composer validation, Pint (90 files),
+workspace lint/typecheck, OpenAPI lint, dashboard build and Android export passed.
+Compose configuration and infrastructure/CORS smoke checks passed. Hosted CI and
+the fresh Codex review request require GitHub API access; local results do not
+establish hosted check or review completion.

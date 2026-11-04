@@ -694,7 +694,7 @@ paths:
     get:
       operationId: getEnrollmentAccess
       summary: Check researcher enrollment access
-      description: Active PENELITI_UTAMA only; ADMIN_IT and blinded-assessor combinations remain denied.
+      description: Active PENELITI_UTAMA only; ADMIN_IT and all PENILAI_HASIL combinations remain denied, regardless of blinding.
         No patient data returned.
       tags:
       - Enrollment

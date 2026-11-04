@@ -11,7 +11,10 @@ Only test fixtures and isolated browser checks contain fabricated study records.
 
 The dashboard uses existing staff login and Sanctum tokens, then checks
 `GET /api/v1/research/access`. Server policy requires an active PENELITI_UTAMA
-that is neither ADMIN_IT nor a blinded assessor. Adding a researcher role to an
+that is neither ADMIN_IT nor PENILAI_HASIL, regardless of the blinding setting.
+Assessor/researcher role combinations are denied all enrollment routes. Editor
+serialization additionally checks the contact policy before loading or decrypting
+contacts. Adding a researcher role to an
 IT account, a contact grant, or any combination of TECHNICAL/CONTACT/CLINICAL_READ
 grants does not authorize enrollment. Patients, nurses and outcome assessors
 cannot access the researcher search/editor or mutate enrollment. Existing PR-03
