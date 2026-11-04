@@ -34,6 +34,7 @@ retention and export governance are not inferred or activated.
 The [access matrix and operational defaults](../security/authentication-rbac.md)
 make implementation decisions reviewable. Role/assignment provisioning is a
 trusted operator responsibility; this PR exposes no public role-editing API.
-The authenticated research resource endpoints are read-only authorization
-surfaces. Clinical data entry, outcome editing, notification delivery and patient
-registration workflows require separately scoped implementation.
+PR-03 resource endpoints remain read-only authorization surfaces. PR-04 now
+authorizes the separate [research enrollment workflow](../enrollment/README.md).
+Daily clinical reporting, outcome editing and notification delivery remain
+separately scoped. Clinical requirements and VAS thresholds are unchanged.

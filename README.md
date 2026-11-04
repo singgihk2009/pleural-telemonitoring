@@ -13,7 +13,9 @@ placeholder screens; the API exposes infrastructure health checks only.
 PR-02 adds a [research database foundation](docs/database/README.md), models and
 synthetic test factories. PR-03 adds [authentication and RBAC](docs/security/authentication-rbac.md)
 with Sanctum bearer tokens, separate hashed patient PINs and participant-scoped
-policies. No clinical engine, active FCM/WhatsApp integration or production
+policies. PR-04 adds [research enrollment and baseline management](docs/enrollment/README.md)
+with a researcher dashboard, validated forms, encrypted contacts and safe audit.
+No clinical engine, active FCM/WhatsApp integration or production
 deployment is included. Migrations are explicit; no
 application tables or seed records are created by Compose startup.
 

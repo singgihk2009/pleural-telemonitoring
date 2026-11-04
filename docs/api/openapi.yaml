@@ -1,9 +1,10 @@
 openapi: 3.1.0
 info:
   title: Pleural Telemonitoring Development API
-  version: 0.3.1
+  version: 0.4.0
   description: TeleNapas infrastructure health, separate staff/patient bearer authentication, and participant-scoped
-    research access. No clinical engine or active notification delivery.
+    research access. No clinical engine or active notification delivery. PR-04 adds researcher-only enrollment
+    and baseline management with encrypted optional contact data and optimistic updates.
 servers:
 - url: http://localhost:8000
   description: Local development API
@@ -17,6 +18,8 @@ tags:
   description: Policy-scoped read projections; default blinded assessment
 - name: Access management
   description: Researcher-issued credentials and separately authorized IT access
+- name: Enrollment
+  description: Researcher-only study enrollment, baseline and status management
 paths:
   /api/v1/health:
     get:
@@ -687,6 +690,196 @@ paths:
         schema:
           type: integer
           minimum: 1
+  /api/v1/research/access:
+    get:
+      operationId: getEnrollmentAccess
+      summary: Check researcher enrollment access
+      description: Active PENELITI_UTAMA only; ADMIN_IT and all PENILAI_HASIL combinations remain denied, regardless of blinding.
+        No patient data returned.
+      tags:
+      - Enrollment
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentAccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: Storage unavailable; SQL, request payload and bindings are not disclosed or logged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/research/participants/search:
+    post:
+      operationId: searchResearchParticipants
+      summary: Search enrolled research participants
+      description: Researcher-only paginated list. Study-code search is a literal substring in the JSON
+        body, never a URL query. Group/status filters and all four counts apply to the same filtered set
+        before pagination. Page size is 25. No contacts or drop-out reasons are embedded.
+      tags:
+      - Enrollment
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: Storage unavailable; SQL, request payload and bindings are not disclosed or logged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentSearch'
+  /api/v1/research/participants:
+    post:
+      operationId: enrollResearchParticipant
+      summary: Enroll a research participant
+      description: Atomically create pseudonymous study data, optional encrypted contact data and an immutable
+        audit event. Neither group receives app credentials automatically; control credentials remain
+        prohibited by the existing schema. Audit events contain no participant ID/code, dates, contacts,
+        clinical values or reasons.
+      tags:
+      - Enrollment
+      security:
+      - bearerAuth: []
+      responses:
+        '201':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentEditorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: Storage unavailable; SQL, request payload and bindings are not disclosed or logged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentCreate'
+  /api/v1/research/participants/{participant}:
+    get:
+      operationId: getEnrollmentEditor
+      summary: Read the researcher enrollment form
+      description: Researcher-only full enrollment editor, including optional decrypted contacts, drop-out
+        reason, baseline lock state and exact record version. Other roles, including separately granted
+        IT, cannot access this endpoint.
+      tags:
+      - Enrollment
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentEditorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: Storage unavailable; SQL, request payload and bindings are not disclosed or logged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      parameters:
+      - name: participant
+        in: path
+        required: true
+        description: Opaque participant UUID; researcher enrollment policy required.
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateResearchEnrollment
+      summary: Update enrollment, baseline or status
+      description: Researcher-only atomic update with parent row locking and an exact optimistic version
+        check. Immutable study group/code; baseline/discharge date freeze once research history exists.
+        No historical record is changed or removed. Events contain fixed action/outcome codes and staff
+        actor only.
+      tags:
+      - Enrollment
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentEditorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: Storage unavailable; SQL, request payload and bindings are not disclosed or logged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          description: The record changed since it was loaded; reload rather than overwriting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentUpdate'
+      parameters:
+      - name: participant
+        in: path
+        required: true
+        description: Opaque participant UUID; researcher enrollment policy required.
+        schema:
+          type: string
+          format: uuid
 components:
   schemas:
     ReadyHealth:
@@ -1145,6 +1338,331 @@ components:
       description: Independent, explicitly approved scope. TECHNICAL grants no patient-resource reads;
         CONTACT permits contact only; CLINICAL_READ permits summary/list, monitoring and outcomes without
         contact. Existing role/blinding restrictions still apply.
+    EnrollmentContact:
+      type: object
+      additionalProperties: false
+      required: []
+      properties:
+        initials:
+          oneOf:
+          - type: string
+            maxLength: 20
+          - type: 'null'
+        patient_contact:
+          oneOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+        family_contact:
+          oneOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+    EnrollmentCreate:
+      type: object
+      additionalProperties: false
+      required:
+      - kode
+      - kelompok
+      - tanggal_pulang
+      - vas_baseline_mm
+      - tanggal_consent
+      - versi_consent
+      properties:
+        kode:
+          type: string
+          minLength: 1
+          maxLength: 32
+        kelompok:
+          type: string
+          enum:
+          - INTERVENSI
+          - KONTROL
+        tanggal_pulang:
+          type: string
+          format: date
+        vas_baseline_mm:
+          type: integer
+          minimum: 0
+          maximum: 100
+        tanggal_consent:
+          type: string
+          format: date
+        versi_consent:
+          type: string
+          minLength: 1
+          maxLength: 40
+        status:
+          type: string
+          enum:
+          - AKTIF
+          - SELESAI
+          - DROP_OUT
+        alasan_drop_out:
+          oneOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+        contact:
+          oneOf:
+          - $ref: '#/components/schemas/EnrollmentContact'
+          - type: 'null'
+      description: Researcher only. Status defaults to AKTIF. DROP_OUT requires a nonempty reason; other
+        states require no reason. Creates no patient app credential. No clinical classification or alert
+        is generated.
+    EnrollmentUpdate:
+      type: object
+      additionalProperties: false
+      required:
+      - expected_updated_at
+      properties:
+        tanggal_pulang:
+          type: string
+          format: date
+        vas_baseline_mm:
+          type: integer
+          minimum: 0
+          maximum: 100
+        tanggal_consent:
+          type: string
+          format: date
+        versi_consent:
+          type: string
+          minLength: 1
+          maxLength: 40
+        status:
+          type: string
+          enum:
+          - AKTIF
+          - SELESAI
+          - DROP_OUT
+        alasan_drop_out:
+          oneOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+        contact:
+          oneOf:
+          - $ref: '#/components/schemas/EnrollmentContact'
+          - type: 'null'
+        expected_updated_at:
+          oneOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+      description: Partial update. Code/group are prohibited even if unchanged. Baseline and discharge
+        date cannot change after any entry, alert, outcome or usability record. Consent/contact/status
+        may still change. Use updated_at verbatim as the expected version, including null for a legacy
+        null timestamp. Stale versions return 409. Non-active status revokes existing patient tokens.
+    EnrollmentSummary:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - kode
+      - kelompok
+      - tanggal_pulang
+      - vas_baseline_mm
+      - tanggal_consent
+      - versi_consent
+      - status
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        kode:
+          type: string
+          minLength: 1
+          maxLength: 32
+        kelompok:
+          type: string
+          enum:
+          - INTERVENSI
+          - KONTROL
+        tanggal_pulang:
+          type: string
+          format: date
+        vas_baseline_mm:
+          type: integer
+          minimum: 0
+          maximum: 100
+        tanggal_consent:
+          type: string
+          format: date
+        versi_consent:
+          type: string
+          minLength: 1
+          maxLength: 40
+        status:
+          type: string
+          enum:
+          - AKTIF
+          - SELESAI
+          - DROP_OUT
+        updated_at:
+          oneOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+    EnrollmentEditor:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - kode
+      - kelompok
+      - tanggal_pulang
+      - vas_baseline_mm
+      - tanggal_consent
+      - versi_consent
+      - status
+      - updated_at
+      - alasan_drop_out
+      - baseline_locked
+      - contact
+      properties:
+        id:
+          type: string
+          format: uuid
+        kode:
+          type: string
+          minLength: 1
+          maxLength: 32
+        kelompok:
+          type: string
+          enum:
+          - INTERVENSI
+          - KONTROL
+        tanggal_pulang:
+          type: string
+          format: date
+        vas_baseline_mm:
+          type: integer
+          minimum: 0
+          maximum: 100
+        tanggal_consent:
+          type: string
+          format: date
+        versi_consent:
+          type: string
+          minLength: 1
+          maxLength: 40
+        status:
+          type: string
+          enum:
+          - AKTIF
+          - SELESAI
+          - DROP_OUT
+        updated_at:
+          oneOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+        alasan_drop_out:
+          oneOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+        baseline_locked:
+          type: boolean
+        contact:
+          oneOf:
+          - $ref: '#/components/schemas/EnrollmentContact'
+          - type: 'null'
+    EnrollmentEditorResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - data
+      properties:
+        data:
+          $ref: '#/components/schemas/EnrollmentEditor'
+    EnrollmentSearch:
+      type: object
+      additionalProperties: false
+      required: []
+      properties:
+        search:
+          oneOf:
+          - type: string
+            maxLength: 32
+            description: Literal study-code substring, not a contact/name search. Sent in JSON rather
+              than the URL.
+          - type: 'null'
+        group:
+          oneOf:
+          - type: string
+            enum:
+            - INTERVENSI
+            - KONTROL
+          - type: 'null'
+        status:
+          oneOf:
+          - type: string
+            enum:
+            - AKTIF
+            - SELESAI
+            - DROP_OUT
+          - type: 'null'
+        page:
+          type: integer
+          minimum: 1
+    EnrollmentPage:
+      type: object
+      additionalProperties: false
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/EnrollmentSummary'
+        meta:
+          type: object
+          additionalProperties: false
+          required:
+          - current_page
+          - last_page
+          - total
+          - intervensi
+          - kontrol
+          - aktif
+          properties:
+            current_page:
+              type: integer
+              minimum: 1
+            last_page:
+              type: integer
+              minimum: 1
+            total:
+              type: integer
+              minimum: 0
+            intervensi:
+              type: integer
+              minimum: 0
+            kontrol:
+              type: integer
+              minimum: 0
+            aktif:
+              type: integer
+              minimum: 0
+    EnrollmentAccessResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - data
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+          - can_manage_enrollment
+          properties:
+            can_manage_enrollment:
+              type: boolean
+              const: true
   securitySchemes:
     bearerAuth:
       type: http

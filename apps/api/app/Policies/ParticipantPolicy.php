@@ -14,6 +14,22 @@ class ParticipantPolicy
 {
     public function __construct(private ParticipantAccess $access) {}
 
+    public function create(Authenticatable $actor): bool
+    {
+        // Enrollment editors include contacts: assessor denial is independent of blinding.
+        return $this->access->researcher($actor) && ! $actor->hasRole(ResearchRoleCode::Assessor);
+    }
+
+    public function update(Authenticatable $actor, Participant $participant): bool
+    {
+        return $this->create($actor);
+    }
+
+    public function viewEnrollment(Authenticatable $actor, Participant $participant): bool
+    {
+        return $this->create($actor);
+    }
+
     public function view(Authenticatable $actor, Participant $participant): bool
     {
         return $this->access->canView($actor, $participant);

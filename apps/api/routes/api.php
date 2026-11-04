@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccessGrantController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CredentialController;
+use App\Http\Controllers\EnrollmentController;
 use App\Http\Controllers\ParticipantController;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,11 @@ Route::post('/auth/staff/login', [AuthController::class, 'staffLogin'])->middlew
 Route::post('/auth/patient/login', [AuthController::class, 'patientLogin'])->middleware('throttle:patient-login')->name('auth.patient.login');
 
 Route::middleware(['auth:sanctum', 'principal.active'])->group(function () {
+    Route::get('/research/access', [EnrollmentController::class, 'access']);
+    Route::post('/research/participants/search', [EnrollmentController::class, 'search']);
+    Route::post('/research/participants', [EnrollmentController::class, 'store']);
+    Route::get('/research/participants/{participant}', [EnrollmentController::class, 'show']);
+    Route::patch('/research/participants/{participant}', [EnrollmentController::class, 'update']);
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/logout-all', [AuthController::class, 'logoutAll']);

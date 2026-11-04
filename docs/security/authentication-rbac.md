@@ -3,7 +3,8 @@
 This implements the PR-03 request and SRS FR-01/02, actor restrictions and audit
 requirements on the merged PR-02 schema. Read the [API contract](../api/openapi.yaml)
 and [research authorization requirements](../research/auth-rbac-v1.0.md).
-No clinical evaluator, clinical write workflow, active notification sender,
+PR-04 adds a [researcher enrollment workflow](../enrollment/README.md).
+No clinical evaluator, daily-report write workflow, active notification sender,
 patient self-registration, export or production deployment is included.
 
 ## Credentials, sessions and provisioning
@@ -193,7 +194,7 @@ These are security settings, not clinical research rules. Changing blinding is
 a deliberate governance decision. Defaults fail closed for assessor access.
 API exception responses remain generic even with debug enabled; validation
 responses contain field errors without input values. CORS retains the exact
-dashboard origin and no credentialed cookies; POST,
+dashboard origin and no credentialed cookies; POST, PATCH,
 DELETE and Authorization headers are added for bearer authentication. CORS does
 not authorize requests. Health remains public and sanitized.
 
@@ -217,3 +218,13 @@ authorization middleware. Transactional synthetic fixtures roll back. The
 separate lifecycle suite must use its own initially empty `_migration_test`
 schema and `TELENAPAS_MIGRATION_TESTS=1`. CI executes both paths. A SQLite run
 explicitly skips these MySQL security/integrity tests and is not security evidence.
+
+PR-04 adds researcher-only enrollment routes. Existing ADMIN_IT read grants do
+not authorize enrollment, baseline edits, status changes or enrollment searches.
+See its [access and integrity rules](../enrollment/README.md).
+
+PR-04 enrollment access denies every PENILAI_HASIL role combination regardless of
+`AUTH_BLINDED_ASSESSMENT`, including PENILAI_HASIL + PENELITI_UTAMA. Create,
+show, update and search share this restriction. Editor serialization additionally
+authorizes `viewContact` before loading/decrypting contacts. Existing contact
+policy/query restrictions and ADMIN_IT scope requirements remain unchanged.
