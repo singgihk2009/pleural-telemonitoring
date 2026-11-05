@@ -123,3 +123,7 @@ origins are deliberately not allowed. Vite uses port 5173 with strict port
 selection so it cannot silently move to an unapproved origin. CORS does not
 protect the API from non-browser clients and is not authentication. This policy
 is for the local bootstrap; production configuration is outside PR-01.
+
+Opt-in synthetic fixtures for local researcher/enrollment/monitoring checks:
+[TeleNapas demo seeder](docs/development/demo-seeder.md). It requires a separate
+empty demo schema and a private operator-supplied credential file.
