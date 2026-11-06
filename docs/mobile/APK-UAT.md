@@ -1,8 +1,8 @@
 # TeleNapas Android APK UAT preparation
 
 This prepares an internal, signed **release APK**, not an AAB, Expo Go session,
-development client, Play Store submission or deployment. **No EAS cloud build has
-been started. Obtain explicit approval before the build command below.**
+development client, Play Store submission or deployment. **This change does not
+start a cloud build. Obtain explicit approval before the build command below.**
 
 ## Configuration
 
@@ -18,6 +18,7 @@ been started. Obtain explicit approval before the build command below.**
 | Expo owner / slug | `singgihk2009s-team` / `pleural-telemonitoring` |
 | EAS project ID | `50efb1a3-5498-48e7-833c-dda406a3d9c9` |
 | Node / pnpm | `24.19.0` / `10.28.2` |
+| Corepack on EAS | `false`; EAS installs the pinned pnpm version |
 | Expo SDK / native generation | SDK 58 / Expo CNG |
 | Version / version source | `1.0.0` / local; choose and record Android versionCode before the first build |
 | Signing | EAS-managed remote credentials, separately approved UAT keystore |
@@ -48,6 +49,22 @@ approved HTTPS API and internal APK profile; default remains `id.telenapas.patie
 Workspace lint/typecheck and all 40 existing mobile tests PASS. The dynamic
 `app.config.ts` needs no change because it preserves the incoming configuration.
 These are public project identifiers, not credentials. No EAS Cloud Build was run.
+
+## PR-09: EAS Corepack/pnpm installation conflict
+
+The first UAT build, `3ed09df5-afa4-496b-b3bb-93fabd1e60fa`, failed before
+application compilation: after enabling Corepack, EAS attempted its global
+installation of pnpm 10.28.2. Corepack's existing `pnpx` shim collided with that
+installation (`EEXIST` at `/home/expo/.nvm/versions/node/v24.19.0/bin/pnpx`).
+
+Set only `build.uat.corepack` to `false` so EAS installs the pinned pnpm without
+first enabling the conflicting shims. Node 24.19.0, pnpm 10.28.2, remote signing,
+APK output, UAT identity and the HTTPS API are unchanged. The root
+`packageManager` and lockfile remain unchanged; local `corepack pnpm` commands
+below still apply. Local configuration checks do not prove the next cloud build
+will pass; an approved rerun is required. No new EAS build is started by this fix.
+Local JSON/EAS schema and default/UAT Expo configuration checks, mobile lint,
+typecheck and all 40 existing mobile tests PASS.
 
 ## Prerequisites before an approved build
 
