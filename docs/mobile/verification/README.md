@@ -1,5 +1,9 @@
 # PR-05 verification evidence
 
+Latest verification of application head `b4470f1` is recorded in the
+[final verification report](PR-05-final-verification.md), with new native lifecycle
+captures. The sections below retain the earlier PR-05 runs and their limits.
+
 Synthetic fixtures only. No real patient data, production deployment or automatic
 merge was used. The supplied PDF's 15 pages were rendered and visually inspected.
 See the [screen comparison and intentional differences](../PR-05.md).
