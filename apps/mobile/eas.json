@@ -10,7 +10,7 @@
       "environment": "preview",
       "node": "24.19.0",
       "pnpm": "10.28.2",
-      "corepack": true,
+      "corepack": false,
       "credentialsSource": "remote",
       "env": {
         "APP_VARIANT": "uat",
