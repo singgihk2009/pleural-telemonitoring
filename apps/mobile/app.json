@@ -31,6 +31,12 @@
         }
       ]
     ],
-    "scheme": "pleural-telemonitoring"
+    "scheme": "pleural-telemonitoring",
+    "owner": "singgihk2009s-team",
+    "extra": {
+      "eas": {
+        "projectId": "50efb1a3-5498-48e7-833c-dda406a3d9c9"
+      }
+    }
   }
 }

@@ -15,6 +15,8 @@ been started. Obtain explicit approval before the build command below.**
 | Deep-link scheme | `telenapas-uat` |
 | API | `https://telenapas.sintaraniapp.net/api/v1` |
 | EAS environment | `preview` |
+| Expo owner / slug | `singgihk2009s-team` / `pleural-telemonitoring` |
+| EAS project ID | `50efb1a3-5498-48e7-833c-dda406a3d9c9` |
 | Node / pnpm | `24.19.0` / `10.28.2` |
 | Expo SDK / native generation | SDK 58 / Expo CNG |
 | Version / version source | `1.0.0` / local; choose and record Android versionCode before the first build |
@@ -37,16 +39,24 @@ public variables, app config, `extra`, assets or source files. Users enter their
 researcher-issued synthetic UAT credentials at runtime. Authentication and
 SecureStore remain the PR-05 implementation; there is no demo-auth bypass.
 
+## PR-08 metadata verification — 6 November 2026 (WIB)
+
+PASS: local `expo config --type public --json` evaluation of default and UAT
+retains the approved owner, slug and EAS project ID above. Router and SecureStore
+plugins are unchanged. UAT still resolves to `id.telenapas.patient.uat` with the
+approved HTTPS API and internal APK profile; default remains `id.telenapas.patient`.
+Workspace lint/typecheck and all 40 existing mobile tests PASS. The dynamic
+`app.config.ts` needs no change because it preserves the incoming configuration.
+These are public project identifiers, not credentials. No EAS Cloud Build was run.
+
 ## Prerequisites before an approved build
 
-1. An authorized Expo account/organization, confirmed project owner and actual
-   EAS project ID. None is invented or linked by this PR.
-2. Link the approved existing project using `npx eas-cli@latest init` from
-   `apps/mobile` after the owner confirms the project. Do not silently create a
-   different organization's project. If the CLI cannot edit dynamic config, add
-   the **verified** UUID to `expo.extra.eas.projectId` in `app.json`; the dynamic
-   config preserves it. Add the confirmed `expo.owner` if the project requires it.
-   Commit/review this public metadata before building.
+1. Access to the approved Expo organization `singgihk2009s-team` and its existing
+   `pleural-telemonitoring` project. The approved owner/project ID are persisted
+   in `app.json`; `app.config.ts` preserves them for both variants.
+2. Confirm the active account can access this project with `npx eas-cli@latest
+   project:info` from `apps/mobile` using the UAT variables below. Do not create or
+   relink a project unless a metadata change is separately approved.
 3. Confirm the approved `preview` EAS environment contains no conflicting
    variant/API settings or application secrets. Do not upload a server `.env` or
    set secrets as `EXPO_PUBLIC_*`. This profile needs only the two public values
