@@ -38,6 +38,7 @@ Route::middleware(['auth:sanctum', 'principal.active'])->group(function () {
         Route::get('/participants/{participant}/'.$resource, [ParticipantController::class, $resource]);
     }
     Route::get('/participants/{participant}/follow-ups', [ParticipantController::class, 'followUps']);
+    Route::get('/participants/{participant}/credentials', [CredentialController::class, 'status']);
     Route::post('/participants/{participant}/credentials', [CredentialController::class, 'issue']);
     Route::delete('/participants/{participant}/credentials', [CredentialController::class, 'revoke']);
     Route::post('/participants/{participant}/identified-access', [AccessGrantController::class, 'store']);

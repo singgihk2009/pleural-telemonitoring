@@ -138,3 +138,30 @@ must be verified separately from local CI-equivalent commands.
 
 See the [PR-04 validation report](validation-pr04.md) for test counts, security
 checks and remaining limitations.
+
+
+## Patient Android PIN management (PR-10)
+
+After saving an eligible intervention enrollment, open **Ubah data partisipan →
+Akses Aplikasi Android**. Server status is **Belum diterbitkan**, **Aktif**, or
+**Dicabut**. Use **Terbitkan PIN Android** for no/revoked credentials, **Reset PIN
+Android** (confirmation required) for active credentials, or **Cabut Akses Android**
+(confirmation required) to revoke the credential and sessions. No participant,
+baseline, consent or research history is deleted. Save pending research-status
+edits before managing access. New enrollments receive no credentials automatically.
+
+A newly generated PIN appears once after successful issuance/reset and authorized
+status verification. Record and communicate the respondent code/PIN through the
+approved secure research procedure, then close **Tutup PIN**. Closing the editor,
+changing participant, logout or session invalidation/expiry also clears it.
+There is no recovery/display-existing-PIN action: stored adaptive hashes cannot
+recover plaintext. Reset again if the PIN was lost. No delivery integration is
+activated, and PINs never appear in participant lists/search/summary cards.
+
+`GET /api/v1/participants/{id}/credentials` is the new minimal, non-cacheable
+credential-status projection. Existing POST/DELETE contracts are retained. Only
+active, authorized principal researchers can access these routes; controls,
+inactive participants, nurses, IT and assessors (including combined roles with
+blinding off) are rejected by server policy. The UI never guesses credential state
+when loading fails. See [full workflow/contract notes](pin-management-pr10.md) and
+[validation](validation-pr10.md).

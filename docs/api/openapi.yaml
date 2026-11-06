@@ -476,12 +476,53 @@ paths:
           type: string
           format: uuid
   /api/v1/participants/{participant}/credentials:
+    get:
+      operationId: getPatientCredentialStatus
+      summary: Read authoritative Android credential status
+      description: Active principal researcher only for active intervention participants. IT and assessor
+        role combinations are always denied. Returns only credential status; never PINs, hashes,
+        tokens, issuer IDs or timestamps. Audited and non-cacheable.
+      tags:
+      - Access management
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: participant
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Safe credential-status projection (Cache-Control no-store).
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required: [status]
+                    properties:
+                      status:
+                        type: string
+                        enum: [BELUM_DITERBITKAN, AKTIF, DICABUT]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
     post:
       operationId: issuePatientCredential
       summary: Issue or reset an intervention patient PIN
-      description: Principal researcher only, never an IT or blinded-assessor role combination. Exactly
+      description: Principal researcher only, never an IT or assessor role combination, regardless of blinding. Exactly
         six ASCII digits are hashed before persistence; the PIN is not returned. Reset revokes all existing
-        patient sessions.
+        patient sessions. Reusing the current PIN is rejected with 422; a successful reset requires a different PIN.
       tags:
       - Access management
       security:

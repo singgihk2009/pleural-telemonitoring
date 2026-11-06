@@ -10,9 +10,26 @@ use App\Models\StaffUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class CredentialController extends Controller
 {
+    public function status(Request $request, Participant $participant): mixed
+    {
+        Gate::authorize('manageCredentials', $participant);
+
+        return DB::transaction(function () use ($request, $participant) {
+            $participant = Participant::whereKey($participant->id)->lockForUpdate()->firstOrFail();
+            Gate::authorize('manageCredentials', $participant);
+            $credential = PatientCredential::whereKey($participant->id)->first(['revoked_at']);
+            $status = ! $credential ? 'BELUM_DITERBITKAN' : ($credential->revoked_at === null ? 'AKTIF' : 'DICABUT');
+            app(SecurityAudit::class)->record($request, 'credential.status_read', 'SUCCESS', $participant->id);
+
+            return response()->json(['data' => ['status' => $status]])->header('Cache-Control', 'no-store');
+        });
+    }
+
     public function issue(Request $request, Participant $participant): mixed
     {
         Gate::authorize('manageCredentials', $participant);
@@ -22,11 +39,15 @@ class CredentialController extends Controller
             $participant = Participant::whereKey($participant->id)->lockForUpdate()->firstOrFail();
             Gate::authorize('manageCredentials', $participant);
             $credential = PatientCredential::whereKey($participant->id)->lockForUpdate()->first() ?? new PatientCredential(['responden_id' => $participant->id]);
-            if ($credential->exists) {
+            $reset = $credential->exists;
+            if ($reset) {
+                if (Hash::check($data['pin'], $credential->pin_hash)) {
+                    throw ValidationException::withMessages(['pin' => ['Choose a different PIN.']]);
+                }
                 $credential->tokens()->delete();
             }
             $credential->fill(['pin_hash' => $data['pin'], 'issued_by' => $request->user()->id, 'issued_at' => now(), 'revoked_at' => null])->save();
-            app(SecurityAudit::class)->record($request, 'credential.issued', 'SUCCESS', $participant->id);
+            app(SecurityAudit::class)->record($request, $reset ? 'credential.reset' : 'credential.issued', 'SUCCESS', $participant->id);
 
             return response()->json(['message' => 'Credential issued. Previous sessions revoked.'], 201)->header('Cache-Control', 'no-store');
         });
@@ -37,13 +58,14 @@ class CredentialController extends Controller
         Gate::authorize('manageCredentials', $participant);
 
         return DB::transaction(function () use ($request, $participant) {
-            Participant::whereKey($participant->id)->lockForUpdate()->firstOrFail();
+            $participant = Participant::whereKey($participant->id)->lockForUpdate()->firstOrFail();
+            Gate::authorize('manageCredentials', $participant);
             $credential = PatientCredential::whereKey($participant->id)->lockForUpdate()->firstOrFail();
             $credential->tokens()->delete();
             $credential->update(['revoked_at' => now()]);
             app(SecurityAudit::class)->record($request, 'credential.revoked', 'SUCCESS', $participant->id);
 
-            return response()->json(['message' => 'Credential and sessions revoked.']);
+            return response()->json(['message' => 'Credential and sessions revoked.'])->header('Cache-Control', 'no-store');
         });
     }
 

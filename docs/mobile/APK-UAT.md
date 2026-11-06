@@ -87,6 +87,8 @@ typecheck and all 40 existing mobile tests PASS.
    from a physical device. `/api/v1/health` returning 200 proves infrastructure
    only. An authorized researcher must supply synthetic active intervention
    credentials in an isolated UAT dataset. This task does not reset/reseed any DB.
+   Use the [researcher PIN workflow](../enrollment/pin-management-pr10.md) to issue,
+   reset or revoke Android access; the demo seeder intentionally issues no PINs.
 6. Confirm EAS SDK-58 build-image availability and device OS compatibility. The
    old PDF's Android 7 proposal is not a promise from Expo 58/RN 0.88. Do not lower
    native requirements to make an unsupported device install.

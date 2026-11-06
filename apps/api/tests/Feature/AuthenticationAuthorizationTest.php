@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Auth\ResearchRoleCode;
+use App\Auth\SecurityAudit;
 use App\Models\Alert;
 use App\Models\AuditLog;
 use App\Models\ClassificationRecord;
@@ -122,7 +123,7 @@ class AuthenticationAuthorizationTest extends TestCase
             ['GET', '/participants'], ['GET', '/participants/{id}'], ['GET', '/participants/{id}/contact'],
             ['GET', '/participants/{id}/entries'], ['GET', '/participants/{id}/alerts'], ['GET', '/participants/{id}/classifications'],
             ['GET', '/participants/{id}/follow-ups'], ['GET', '/participants/{id}/outcome'],
-            ['POST', '/participants/{id}/credentials'], ['DELETE', '/participants/{id}/credentials'],
+            ['GET', '/participants/{id}/credentials'], ['POST', '/participants/{id}/credentials'], ['DELETE', '/participants/{id}/credentials'],
             ['POST', '/participants/{id}/identified-access'], ['DELETE', '/participants/{id}/identified-access/1'], ['DELETE', '/staff/1/tokens'],
         ]);
     }
@@ -491,5 +492,123 @@ class AuthenticationAuthorizationTest extends TestCase
         }
         $this->expectException(QueryException::class);
         AuditLog::query()->update(['aksi' => 'tampered']);
+    }
+
+    public function test_dashboard_credential_status_and_android_login_reset_revoke_lifecycle(): void
+    {
+        $participant = Participant::factory()->create();
+        $snapshot = $participant->fresh()->getRawOriginal();
+        $entry = DailyEntry::factory()->create(['responden_id' => $participant->id]);
+        $entrySnapshot = $entry->fresh()->getRawOriginal();
+        $staff = $this->token($this->staff(ResearchRoleCode::Researcher));
+        $path = '/participants/'.$participant->id.'/credentials';
+        $this->callAs($staff, 'GET', $path)->assertOk()->assertExactJson(['data' => ['status' => 'BELUM_DITERBITKAN']])->assertHeader('Cache-Control', 'no-store, private');
+        $this->callAs($staff, 'POST', $path, ['pin' => '001234'])->assertCreated()->assertJsonMissingPath('pin')->assertJsonMissingPath('pin_hash');
+        $credential = PatientCredential::findOrFail($participant->id);
+        $this->assertTrue(Hash::check('001234', $credential->pin_hash));
+        $this->assertNotSame('001234', $credential->getRawOriginal('pin_hash'));
+        $this->callAs($staff, 'GET', $path)->assertExactJson(['data' => ['status' => 'AKTIF']]);
+        $token = $this->loginPatient($credential, '001234')->assertOk()->json('access_token');
+        $this->callAs($token, 'GET', '/auth/me')->assertOk()->assertJsonPath('data.kind', 'patient');
+        $this->callAs($token, 'GET', '/participants/'.$participant->id)->assertOk();
+        $this->callAs($token, 'GET', $path)->assertForbidden();
+        $this->callAs($token, 'POST', $path, ['pin' => '000007'])->assertForbidden();
+        $this->callAs($token, 'DELETE', $path)->assertForbidden();
+        $this->callAs($token, 'POST', '/auth/logout')->assertOk();
+        $old = $this->loginPatient($credential, '001234')->assertOk()->json('access_token');
+        $this->callAs($staff, 'POST', $path, ['pin' => '000007'])->assertCreated();
+        $this->callAs($old, 'GET', '/auth/me')->assertUnauthorized();
+        $this->loginPatient($credential->fresh(), '001234')->assertUnauthorized();
+        $new = $this->loginPatient($credential->fresh(), '000007')->assertOk()->json('access_token');
+        $this->callAs($new, 'GET', '/auth/me')->assertOk();
+        $this->callAs($new, 'GET', '/participants/'.$participant->id)->assertOk();
+        $this->callAs($staff, 'DELETE', $path)->assertOk();
+        $this->callAs($new, 'GET', '/auth/me')->assertUnauthorized();
+        $this->loginPatient($credential->fresh(), '000007')->assertUnauthorized();
+        $this->callAs($staff, 'GET', $path)->assertExactJson(['data' => ['status' => 'DICABUT']]);
+        $this->assertSame($snapshot, $participant->fresh()->getRawOriginal());
+        $this->assertSame($entrySnapshot, $entry->fresh()->getRawOriginal());
+        $this->assertDatabaseHas('audit_log', ['aksi' => 'credential.reset']);
+        foreach (['001234', '000007', $staff, $old, $new, $participant->kode, 'pin_hash'] as $secret) {
+            $this->assertStringNotContainsString($secret, AuditLog::all()->toJson());
+        }
+    }
+
+    #[DataProvider('credentialDeniedActors')]
+    public function test_credential_status_and_mutations_deny_unauthorized_roles_in_all_blinding_modes(array $roles, bool $blinded): void
+    {
+        config(['research_auth.blinded_assessment' => $blinded]);
+        $actor = $this->staff(...array_map(fn ($code) => ResearchRoleCode::from($code), $roles));
+        $token = $this->token($actor);
+        $participant = Participant::factory()->create();
+        PatientCredential::factory()->create(['responden_id' => $participant->id]);
+        foreach (['GET', 'POST', 'DELETE'] as $method) {
+            $this->callAs($token, $method, '/participants/'.$participant->id.'/credentials', ['pin' => '019283'])->assertStatus(in_array('PASIEN_KELUARGA', $roles, true) ? 401 : 403);
+        }
+        $this->assertTrue(Hash::check('012345', PatientCredential::findOrFail($participant->id)->pin_hash));
+        $this->assertNull(PatientCredential::findOrFail($participant->id)->revoked_at);
+    }
+
+    public static function credentialDeniedActors(): array
+    {
+        $cases = [];
+        foreach ([[], ['ADMIN_IT'], ['PERAWAT_PEMANTAU'], ['PERAWAT_CADANGAN'], ['PENILAI_HASIL'], ['PASIEN_KELUARGA'], ['PENELITI_UTAMA', 'ADMIN_IT'], ['PENELITI_UTAMA', 'PENILAI_HASIL']] as $roles) {
+            foreach ([true, false] as $blinded) {
+                $cases[] = [$roles, $blinded];
+            }
+        }
+
+        return $cases;
+    }
+
+    public function test_control_and_inactive_participants_cannot_be_managed_and_no_rows_are_created(): void
+    {
+        $token = $this->token($this->staff(ResearchRoleCode::Researcher));
+        foreach ([Participant::factory()->control()->create(), Participant::factory()->create(['status' => 'SELESAI']), Participant::factory()->create(['status' => 'DROP_OUT', 'alasan_drop_out' => 'SYNTHETIC withdrawal'])] as $participant) {
+            foreach (['GET', 'POST', 'DELETE'] as $method) {
+                $this->callAs($token, $method, '/participants/'.$participant->id.'/credentials', ['pin' => '001234'])->assertForbidden();
+            }
+            $this->assertNull(PatientCredential::find($participant->id));
+        }
+    }
+
+    #[DataProvider('invalidPins')]
+    public function test_issuance_rejects_non_six_ascii_string_pins_without_partial_records(mixed $pin): void
+    {
+        $token = $this->token($this->staff(ResearchRoleCode::Researcher));
+        $participant = Participant::factory()->create();
+        $this->callAs($token, 'POST', '/participants/'.$participant->id.'/credentials', ['pin' => $pin])->assertUnprocessable();
+        $this->assertNull(PatientCredential::find($participant->id));
+    }
+
+    public function test_reset_cannot_reuse_the_current_pin_and_preserves_existing_sessions_on_failure(): void
+    {
+        $credential = PatientCredential::factory()->create();
+        $token = $this->token($this->staff(ResearchRoleCode::Researcher));
+        $patient = $this->token($credential);
+        $this->callAs($token, 'POST', '/participants/'.$credential->responden_id.'/credentials', ['pin' => '012345'])->assertUnprocessable();
+        $this->callAs($patient, 'GET', '/auth/me')->assertOk();
+        $this->assertTrue(Hash::check('012345', $credential->fresh()->pin_hash));
+    }
+
+    public function test_audit_failure_rolls_back_issuance_and_reset_including_token_deletion(): void
+    {
+        $participant = Participant::factory()->create();
+        $credential = PatientCredential::factory()->create();
+        $token = $this->token($this->staff(ResearchRoleCode::Researcher));
+        $this->token($credential);
+        $hash = $credential->getRawOriginal('pin_hash');
+        $this->mock(SecurityAudit::class, function ($mock) {
+            $mock->shouldReceive('record')->andThrow(new \RuntimeException('Synthetic audit failure'));
+        });
+        $this->callAs($token, 'POST', '/participants/'.$participant->id.'/credentials', ['pin' => '001234'])->assertStatus(500);
+        $this->assertNull(PatientCredential::find($participant->id));
+        $this->callAs($token, 'POST', '/participants/'.$credential->responden_id.'/credentials', ['pin' => '001234'])->assertStatus(500);
+        $this->assertSame($hash, $credential->fresh()->getRawOriginal('pin_hash'));
+        $this->assertSame(1, $credential->tokens()->count());
+        $this->assertNull($credential->fresh()->revoked_at);
+        $this->callAs($token, 'DELETE', '/participants/'.$credential->responden_id.'/credentials')->assertStatus(500);
+        $this->assertNull($credential->fresh()->revoked_at);
+        $this->assertSame(1, $credential->tokens()->count());
     }
 }

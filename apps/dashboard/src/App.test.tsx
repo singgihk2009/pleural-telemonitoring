@@ -353,3 +353,35 @@ test('logout clears local participant data even when server revocation cannot be
     'Keluar dari perangkat ini. Pencabutan sesi server belum dapat dikonfirmasi.',
   )
 })
+
+test('researcher manages Android PIN inside the existing participant editor without saving enrollment', async () => {
+  let status = 'BELUM_DITERBITKAN'
+  overrides = (path, method) => {
+    if (path !== `/participants/${participant.id}/credentials`) return undefined
+    if (method === 'POST') { status = 'AKTIF'; return json({ message: 'Success' }, 201) }
+    if (method === 'DELETE') { status = 'DICABUT'; return json({ message: 'Success' }) }
+    return json({ data: { status } })
+  }
+  await signIn(); await screen.findByText(participant.kode)
+  fireEvent.click(screen.getByRole('button', { name: `Ubah partisipan ${participant.kode}` }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Terbitkan PIN Android' }))
+  const reveal = await screen.findByRole('region', { name: 'PIN Android berhasil diterbitkan' })
+  expect(within(reveal).getByText(participant.kode, { exact: false })).toBeTruthy()
+  expect(calls.find(c => c.path.endsWith('/credentials') && c.method === 'POST')?.data.pin).toMatch(/^[0-9]{6}$/)
+  expect(calls.some(c => c.method === 'PATCH')).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: 'Tutup editor' }))
+  expect(screen.queryByRole('region', { name: 'PIN Android berhasil diterbitkan' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: `Ubah partisipan ${participant.kode}` }))
+  await screen.findByRole('button', { name: 'Reset PIN Android' })
+  expect(screen.queryByRole('region', { name: 'PIN Android berhasil diterbitkan' })).toBeNull()
+})
+
+test('credential denial invalidates staff session without revealing PIN', async () => {
+  overrides = (path, method) => path.endsWith('/credentials') ?
+    method === 'GET' ? json({ data: { status: 'BELUM_DITERBITKAN' } }) : json({}, 403) : undefined
+  await signIn(); await screen.findByText(participant.kode)
+  fireEvent.click(screen.getByRole('button', { name: `Ubah partisipan ${participant.kode}` }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Terbitkan PIN Android' }))
+  await screen.findByRole('button', { name: 'Masuk ke ruang penelitian' })
+  expect(screen.queryByRole('region', { name: 'PIN Android berhasil diterbitkan' })).toBeNull()
+})

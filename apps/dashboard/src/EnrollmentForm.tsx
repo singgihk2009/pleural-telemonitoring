@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from 'react'
 import { ApiError, errorMessage, request } from './api'
 import type { Enrollment, Group, Session, Status } from './api'
 import { Icon } from './icons'
+import { AndroidAccess } from './AndroidAccess'
 
 type Fields = {
   kode: string
@@ -452,6 +453,14 @@ export function EnrollmentForm({
                   )}
                 </div>
               </section>
+              {record && (
+                <AndroidAccess
+                  participant={record}
+                  session={session}
+                  disabled={saving || fields.status !== record.status}
+                  onExpired={onExpired}
+                />
+              )}
             </div>
             <footer className="modal-foot">
               <small>* Wajib diisi</small>
