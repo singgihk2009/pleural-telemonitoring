@@ -82,3 +82,10 @@ behavior. Preserve user changes. Summarize changes, checks and remaining blocker
 in PR updates. For PR-04, push to `feature/pr-04-research-enrollment` and create
 a pull request targeting `main`; do not merge, force-push or deploy. Do not publish
 or send messages to external services unless explicitly authorized.
+
+PR-05 authorizes the Android patient Expo Router UI and existing patient-auth API
+integration with SecureStore. Follow `docs/mobile/PR-05.md` and the supplied visual
+PDF for screens, while preserving explicit task restrictions: no client clinical
+classification, final symptom catalog, Health-ITUES invention, unavailable API
+submission, notifications, real patient data or deployment. Mark placeholders and
+separate native emulator results from JavaScript export evidence.
