@@ -1,0 +1,24 @@
+{
+  "cli": {
+    "version": ">= 27.5.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "uat": {
+      "distribution": "internal",
+      "developmentClient": false,
+      "environment": "preview",
+      "node": "24.19.0",
+      "pnpm": "10.28.2",
+      "corepack": true,
+      "credentialsSource": "remote",
+      "env": {
+        "APP_VARIANT": "uat",
+        "EXPO_PUBLIC_API_BASE_URL": "https://telenapas.sintaraniapp.net/api/v1"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  }
+}
