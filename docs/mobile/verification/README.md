@@ -11,7 +11,7 @@ See the [screen comparison and intentional differences](../PR-05.md).
 | Frozen pnpm install | PASS |
 | Workspace lint / typecheck | PASS |
 | Dashboard tests | PASS — 13 |
-| Mobile component/navigation/security tests | PASS — 24 |
+| Mobile component/navigation/security tests | PASS — 40 |
 | OpenAPI validation | PASS |
 | Dashboard production build | PASS |
 | Android JavaScript export | PASS — not an APK or native test |
@@ -136,3 +136,43 @@ researcher education content, messages, nurse-number settings, event reports,
 repeat scheduling, final questionnaire/scoring and versioned server
 acknowledgement are intentionally inactive. No clinical engine, notifications,
 FCM, WhatsApp, real patient dataset, deployment or automatic merge is included.
+
+
+## PR #5 P2 session-race correction — 2026-11-06
+
+PASS: 16 new deferred-promise regressions plus the original 24 mobile tests.
+Each of token issuance, identity lookup, participant lookup and SecureStore write
+is paused while background/foreground is emitted; successful login survives,
+without a second restore or deletion. Each stage is also interrupted by logout,
+provider unmount and a newer login; abandoned tokens are revoked and only the
+newest login can persist. The overlapping SecureStore-write test checks cleanup
+ordering before the replacement write. Existing patient-only checks, secure-store
+failure, logout and expiration tests remain passing.
+
+PASS: dashboard 13 tests; MySQL 8.4 API 163 tests / 1,373 assertions;
+separate lifecycle/auth-upgrade/grant-scope tests 11/13/19 assertions in newly
+created disposable schemas; Composer strict validation/Pint; workspace lint and
+typecheck; OpenAPI; dashboard build; Android JavaScript export.
+
+PDF pages 4–8 were visually re-inspected against the F1–F10 mapping above and
+screen implementation. No layout changed; the existing 28 native screenshots
+remain the visual baseline. No clinical engine, active alerts/messages or symptom
+submission was added. Acknowledgement and backend-placeholder limitations remain.
+
+Hosted GitHub checks and a fresh Codex review require GitHub API access, which
+currently returns Forbidden from this environment. The native results above
+belong to the original PR-05 validation; correction-specific native results are
+reported separately below and must not be inferred from the JavaScript export.
+
+Correction-specific Android smoke: NOT VERIFIED. A fresh launch of the existing
+API 30 AOSP AVD under software emulation exposed an Android runtime failure:
+`service check activity` reported `not found`; two Expo Go installation attempts
+failed with `Broken pipe (32)` and `Can't find service: package`. Consequently
+this revision has no new successful native login/lifecycle result or screenshot.
+The original screenshots are retained, not relabelled as new evidence. A working
+emulator/device must rerun login/background/foreground/logout before merge.
+The deferred tests establish the race fix at each async boundary; they do not
+establish native SecureStore timing or Android lifecycle behavior.
+
+Regression sensitivity check: all 16 new tests fail against the original
+`937703c` session implementation and pass with this correction.

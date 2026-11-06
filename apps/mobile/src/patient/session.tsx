@@ -17,6 +17,21 @@ export function PatientProvider({ children }: PropsWithChildren) {
   });
   const current = useRef<Session | null>(null);
   const generation = useRef(0);
+  const pendingLogin = useRef<number | null>(null);
+  // Order mutations so cleanup from an old login cannot erase a newer token.
+  const storage = useRef<Promise<unknown>>(Promise.resolve());
+  function stored<T>(operation: () => Promise<T>): Promise<T> {
+    const result = storage.current.then(operation);
+    storage.current = result.catch(() => undefined);
+    return result;
+  }
+  async function revoke(token: string) {
+    try {
+      await request('/auth/logout', token, {});
+    } catch {
+      // Best effort while offline; server expiration still bounds the token lifetime.
+    }
+  }
   async function clear(message: string) {
     generation.current++;
     current.current = null;
@@ -30,7 +45,7 @@ export function PatientProvider({ children }: PropsWithChildren) {
       message,
     }));
     try {
-      await vault.clear();
+      await stored(() => vault.clear());
     } catch {
       setState((s) => ({
         ...s,
@@ -57,10 +72,12 @@ export function PatientProvider({ children }: PropsWithChildren) {
     };
   }
   async function restore() {
+    // Foreground/retry must not supersede credential exchange, identity checks or persistence.
+    if (pendingLogin.current !== null) return;
     const run = ++generation.current;
     setState((s) => ({ ...s, busy: true }));
     try {
-      const session = current.current ?? (await vault.read());
+      const session = current.current ?? (await stored(() => vault.read()));
       if (run !== generation.current) return;
       if (!session) {
         setState((s) => ({ ...s, ready: true, busy: false }));
@@ -129,8 +146,10 @@ export function PatientProvider({ children }: PropsWithChildren) {
   }
   async function login(code: string, pin: string) {
     const run = ++generation.current;
+    pendingLogin.current = run;
     setState((s) => ({ ...s, busy: true, message: '' }));
     let issued: Session | null = null;
+    let committed = false;
     try {
       const response = await request<{
         access_token: string;
@@ -140,13 +159,20 @@ export function PatientProvider({ children }: PropsWithChildren) {
       issued = { token: response.access_token, expires: response.expires_at };
       if (typeof issued.token !== 'string' || !Number.isFinite(Date.parse(issued.expires)))
         throw new Error('Invalid session');
+      if (run !== generation.current) return;
       const profile = await identity(issued);
       if (run !== generation.current) return;
-      await vault.save(issued);
-      if (run !== generation.current) {
-        await vault.clear();
-        return;
-      }
+      const session = issued;
+      await stored(async () => {
+        if (run !== generation.current) return;
+        await vault.save(session);
+        // This cleanup is part of the same queue item as the write.
+        if (run !== generation.current) await vault.clear();
+      });
+      if (run !== generation.current) return;
+      if (Date.parse(issued.expires) <= Date.now())
+        throw new ApiError(401, 'Sesi berakhir. Silakan masuk kembali.');
+      committed = true;
       current.current = issued;
       setState((s) => ({
         ...s,
@@ -158,19 +184,15 @@ export function PatientProvider({ children }: PropsWithChildren) {
         message: '',
       }));
     } catch (error) {
-      if (issued) {
-        try {
-          await request('/auth/logout', issued.token, {});
-        } catch {
-          /* expiry limits an unpersisted token */
-        }
-      }
       if (run !== generation.current) return;
       await clear(
         error instanceof ApiError
           ? error.message
           : 'Tidak dapat menyimpan sesi dengan aman. Silakan coba lagi.',
       );
+    } finally {
+      if (pendingLogin.current === run) pendingLogin.current = null;
+      if (issued && !committed) await revoke(issued.token);
     }
   }
   async function api<T>(path: string): Promise<T> {
