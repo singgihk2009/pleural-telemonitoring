@@ -32,7 +32,8 @@ class AuthenticationMigrationTest extends TestCase
         $snapshot = $participant->fresh()->getRawOriginal();
         $this->artisan('migrate', ['--path' => $authentication, '--force' => true])->assertExitCode(0);
         $this->assertSame($snapshot, $participant->fresh()->getRawOriginal());
-        PatientCredential::factory()->create(['responden_id' => $participant->id]);
+        // Historical v1.1 fixture predates the additive revision column; hashing casts still apply.
+        PatientCredential::withoutEvents(fn () => PatientCredential::factory()->create(['responden_id' => $participant->id]));
         $this->assertTrue(Schema::hasTable('personal_access_tokens'));
         // Only the auth migration is in the latest batch; no research table is rolled back.
         $this->artisan('migrate:rollback', ['--step' => 1, '--force' => true])->assertExitCode(0);

@@ -1,4 +1,7 @@
-# PR-10 validation — 7 November 2026 (WIB)
+# PR-10 initial validation — 7 November 2026 (WIB)
+
+Historical results for the original PR-10 implementation. The concurrency/recovery
+protocol and current results are in [correction validation](validation-pr10-correction.md).
 
 Scope: researcher-managed patient Android access, from main `af20230`.
 Synthetic records only; no deployment, EAS build, database reset, schema change,

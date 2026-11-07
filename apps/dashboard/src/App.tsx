@@ -547,6 +547,7 @@ function Workspace({
           onClose={() => setEditor(null)}
           onSaved={saved}
           onExpired={onExpired}
+          onLogout={onLogout}
         />
       )}
     </>

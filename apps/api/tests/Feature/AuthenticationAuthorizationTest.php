@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -71,6 +72,10 @@ class AuthenticationAuthorizationTest extends TestCase
     private function callAs(?string $token, string $method, string $path, array $data = [])
     {
         Auth::forgetGuards();
+        // Simulate a client that loaded the current credential snapshot before a mutation.
+        if (in_array($method, ['POST', 'DELETE'], true) && preg_match('~^/participants/([^/]+)/credentials$~', $path, $matches) && ! array_key_exists('expected_revision', $data)) {
+            $data['expected_revision'] = PatientCredential::find($matches[1])?->revision;
+        }
 
         return $this->json($method, '/api/v1'.$path, $data, $token ? ['Authorization' => 'Bearer '.$token] : []);
     }
@@ -502,12 +507,12 @@ class AuthenticationAuthorizationTest extends TestCase
         $entrySnapshot = $entry->fresh()->getRawOriginal();
         $staff = $this->token($this->staff(ResearchRoleCode::Researcher));
         $path = '/participants/'.$participant->id.'/credentials';
-        $this->callAs($staff, 'GET', $path)->assertOk()->assertExactJson(['data' => ['status' => 'BELUM_DITERBITKAN']])->assertHeader('Cache-Control', 'no-store, private');
+        $this->callAs($staff, 'GET', $path)->assertOk()->assertExactJson(['data' => ['status' => 'BELUM_DITERBITKAN', 'revision' => null]])->assertHeader('Cache-Control', 'no-store, private');
         $this->callAs($staff, 'POST', $path, ['pin' => '001234'])->assertCreated()->assertJsonMissingPath('pin')->assertJsonMissingPath('pin_hash');
         $credential = PatientCredential::findOrFail($participant->id);
         $this->assertTrue(Hash::check('001234', $credential->pin_hash));
         $this->assertNotSame('001234', $credential->getRawOriginal('pin_hash'));
-        $this->callAs($staff, 'GET', $path)->assertExactJson(['data' => ['status' => 'AKTIF']]);
+        $this->callAs($staff, 'GET', $path)->assertExactJson(['data' => ['status' => 'AKTIF', 'revision' => $credential->fresh()->revision]]);
         $token = $this->loginPatient($credential, '001234')->assertOk()->json('access_token');
         $this->callAs($token, 'GET', '/auth/me')->assertOk()->assertJsonPath('data.kind', 'patient');
         $this->callAs($token, 'GET', '/participants/'.$participant->id)->assertOk();
@@ -525,7 +530,7 @@ class AuthenticationAuthorizationTest extends TestCase
         $this->callAs($staff, 'DELETE', $path)->assertOk();
         $this->callAs($new, 'GET', '/auth/me')->assertUnauthorized();
         $this->loginPatient($credential->fresh(), '000007')->assertUnauthorized();
-        $this->callAs($staff, 'GET', $path)->assertExactJson(['data' => ['status' => 'DICABUT']]);
+        $this->callAs($staff, 'GET', $path)->assertExactJson(['data' => ['status' => 'DICABUT', 'revision' => $credential->fresh()->revision]]);
         $this->assertSame($snapshot, $participant->fresh()->getRawOriginal());
         $this->assertSame($entrySnapshot, $entry->fresh()->getRawOriginal());
         $this->assertDatabaseHas('audit_log', ['aksi' => 'credential.reset']);
@@ -610,5 +615,79 @@ class AuthenticationAuthorizationTest extends TestCase
         $this->callAs($token, 'DELETE', '/participants/'.$credential->responden_id.'/credentials')->assertStatus(500);
         $this->assertNull($credential->fresh()->revoked_at);
         $this->assertSame(1, $credential->tokens()->count());
+    }
+
+    public function test_stale_credential_writes_cannot_supersede_a_confirmed_operation(): void
+    {
+        $participant = Participant::factory()->create();
+        $path = '/participants/'.$participant->id.'/credentials';
+        $a = $this->token($this->staff(ResearchRoleCode::Researcher));
+        $b = $this->token($this->staff(ResearchRoleCode::Researcher));
+        foreach ([$a, $b] as $actor) {
+            $this->callAs($actor, 'GET', $path)->assertJsonPath('data.revision', null);
+        }
+        $first = $this->callAs($a, 'POST', $path, ['pin' => '001234', 'expected_revision' => null])->assertCreated()->json('data.revision');
+        $this->assertTrue(Str::isUuid($first));
+        $credential = PatientCredential::findOrFail($participant->id);
+        $patient = $this->token($credential);
+        $this->callAs($b, 'POST', $path, ['pin' => '009876', 'expected_revision' => null])->assertConflict();
+        $this->callAs($b, 'DELETE', $path, ['expected_revision' => null])->assertConflict();
+        $this->assertSame($first, $credential->fresh()->revision);
+        $this->assertTrue(Hash::check('001234', $credential->fresh()->pin_hash));
+        $this->callAs($patient, 'GET', '/auth/me')->assertOk();
+        $second = $this->callAs($b, 'POST', $path, ['pin' => '009876', 'expected_revision' => $first])->assertCreated()->json('data.revision');
+        $this->assertNotSame($first, $second);
+        $this->callAs($a, 'GET', $path)->assertJsonPath('data.status', 'AKTIF')->assertJsonPath('data.revision', $second);
+        $this->callAs($patient, 'GET', '/auth/me')->assertUnauthorized();
+        $revoked = $this->callAs($b, 'DELETE', $path, ['expected_revision' => $second])->assertOk()->json('data.revision');
+        $this->assertNotSame($second, $revoked);
+        $this->assertSame(2, AuditLog::whereIn('aksi', ['credential.issued', 'credential.reset'])->count());
+    }
+
+    public function test_revision_is_required_and_malformed_values_are_rejected_before_any_write(): void
+    {
+        $participant = Participant::factory()->create();
+        $token = $this->token($this->staff(ResearchRoleCode::Researcher));
+        foreach ([['pin' => '001234'], ['pin' => '001234', 'expected_revision' => 'invalid'], ['pin' => '001234', 'expected_revision' => 1]] as $data) {
+            Auth::forgetGuards();
+            $this->json('POST', '/api/v1/participants/'.$participant->id.'/credentials', $data, ['Authorization' => 'Bearer '.$token])->assertUnprocessable();
+        }
+        $this->assertNull(PatientCredential::find($participant->id));
+    }
+
+    public function test_legacy_revision_is_safe_and_supported_model_changes_rotate_it(): void
+    {
+        $credential = PatientCredential::factory()->create();
+        $hash = $credential->getRawOriginal('pin_hash');
+        // Simulate an existing v1.1 credential after the nullable additive upgrade.
+        DB::table('patient_credentials')->where('responden_id', $credential->responden_id)->update(['revision' => null]);
+        $this->assertSame($hash, $credential->fresh()->getRawOriginal('pin_hash'));
+        $token = $this->token($this->staff(ResearchRoleCode::Researcher));
+        $path = '/participants/'.$credential->responden_id.'/credentials';
+        $this->callAs($token, 'GET', $path)->assertExactJson(['data' => ['status' => 'AKTIF', 'revision' => null]]);
+        $revision = $this->callAs($token, 'POST', $path, ['pin' => '001234', 'expected_revision' => null])->assertCreated()->json('data.revision');
+        $credential->refresh()->update(['pin_hash' => '009876']);
+        $this->assertNotSame($revision, $credential->fresh()->revision);
+        $this->callAs($token, 'POST', $path, ['pin' => '001234', 'expected_revision' => $revision])->assertConflict();
+    }
+
+    public function test_status_get_does_not_exclusively_lock_or_append_success_read_audits(): void
+    {
+        $credential = PatientCredential::factory()->create();
+        $token = $this->token($this->staff(ResearchRoleCode::Researcher));
+        $before = AuditLog::count();
+        $queries = [];
+        DB::listen(function ($event) use (&$queries) {
+            $queries[] = strtolower($event->sql);
+        });
+        for ($i = 0; $i < 3; $i++) {
+            $this->callAs($token, 'GET', '/participants/'.$credential->responden_id.'/credentials')
+                ->assertOk()->assertExactJson(['data' => ['status' => 'AKTIF', 'revision' => $credential->revision]])->assertHeader('Cache-Control', 'no-store, private');
+        }
+        $this->assertSame($before, AuditLog::count());
+        foreach ($queries as $sql) {
+            $this->assertStringNotContainsString('for update', $sql);
+            $this->assertStringNotContainsString('pin_hash', $sql);
+        }
     }
 }

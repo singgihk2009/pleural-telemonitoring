@@ -3,6 +3,12 @@ import { ApiError, errorMessage, request } from './api'
 import type { Enrollment, Session } from './api'
 import { generatePin } from './pin'
 
+type Snapshot = { status: CredentialStatus; revision: string | null }
+const revisionValid = (value: unknown): value is string | null =>
+  value === null ||
+  (typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))
+
 type CredentialStatus = 'BELUM_DITERBITKAN' | 'AKTIF' | 'DICABUT'
 const labels: Record<CredentialStatus, string> = {
   BELUM_DITERBITKAN: 'Belum diterbitkan',
@@ -14,11 +20,13 @@ export function AndroidAccess({
   session,
   disabled,
   onExpired,
+  onPendingChange,
 }: {
   participant: Enrollment
   session: Session
   disabled: boolean
   onExpired: () => void
+  onPendingChange?: (pending: boolean) => void
 }) {
   // Changing participant remounts all secret/operation state, including pending promises.
   return (
@@ -28,6 +36,7 @@ export function AndroidAccess({
       session={session}
       disabled={disabled}
       onExpired={onExpired}
+      onPendingChange={onPendingChange}
     />
   )
 }
@@ -36,20 +45,32 @@ function CredentialPanel({
   session,
   disabled,
   onExpired,
+  onPendingChange,
 }: {
   participant: Enrollment
   session: Session
   disabled: boolean
   onExpired: () => void
+  onPendingChange?: (pending: boolean) => void
 }) {
   const eligible = participant.kelompok === 'INTERVENSI' && participant.status === 'AKTIF'
-  const [status, setStatus] = useState<{ owner: string; value: CredentialStatus } | null>(null)
-  const [pin, setPin] = useState<{ owner: string; value: string } | null>(null)
+  const [status, setStatus] = useState<{
+    owner: string
+    value: CredentialStatus
+    revision: string | null
+  } | null>(null)
+  const [pin, setPin] = useState<{ owner: string; value: string; revision: string } | null>(
+    null,
+  )
   const [confirm, setConfirm] = useState<'reset' | 'revoke' | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [retry, setRetry] = useState(0)
+  const [mutating, setMutating] = useState(false)
+  const [verified, setVerified] = useState(false)
+  const [verifiedAt, setVerifiedAt] = useState('')
+  const verifyAgain = useRef<() => void>(() => undefined)
   const pending = useRef(false)
   const generation = useRef(0)
   const controller = useRef<AbortController | null>(null)
@@ -59,20 +80,26 @@ function CredentialPanel({
   const hadPanel = useRef(false)
   const path = `/participants/${encodeURIComponent(participant.id)}/credentials`
   const current = status?.owner === session.token ? status.value : null
+  const currentPin = pin?.owner === session.token ? pin : null
   const secret =
-    pin?.owner === session.token && Date.parse(session.expiresAt) > Date.now()
-      ? pin.value
+    currentPin &&
+    verified &&
+    document.visibilityState !== 'hidden' &&
+    status?.revision === currentPin.revision &&
+    Date.parse(session.expiresAt) > Date.now()
+      ? currentPin.value
       : null
-  async function read(signal: AbortSignal): Promise<CredentialStatus> {
-    const response = await request<{ data: { status: CredentialStatus } }>(
+  async function read(signal: AbortSignal): Promise<Snapshot> {
+    const response = await request<{ data: Snapshot }>(
       path,
       session.token,
       'GET',
       undefined,
       signal,
     )
-    if (!Object.hasOwn(labels, response.data.status)) throw new Error('Invalid status')
-    return response.data.status
+    if (!Object.hasOwn(labels, response.data.status) || !revisionValid(response.data.revision))
+      throw new Error('Invalid status')
+    return response.data
   }
   useEffect(() => {
     const run = ++generation.current
@@ -81,6 +108,7 @@ function CredentialPanel({
     pending.current = true
     // Credential plaintext must be cleared on identity/session/eligibility changes.
     setPin(null)
+    setVerified(false)
     setConfirm(null)
     setStatus(null)
     setError('')
@@ -89,7 +117,8 @@ function CredentialPanel({
     if (eligible) {
       void read(abort.signal)
         .then((value) => {
-          if (generation.current === run) setStatus({ owner: session.token, value })
+          if (generation.current === run)
+            setStatus({ owner: session.token, value: value.status, revision: value.revision })
         })
         .catch((failure) => {
           if (generation.current !== run) return
@@ -110,6 +139,8 @@ function CredentialPanel({
         setPin(null)
         setStatus(null)
         setConfirm(null)
+        setMutating(false)
+        onPendingChange?.(false)
         onExpired()
       },
       Math.max(0, Date.parse(session.expiresAt) - Date.now()),
@@ -118,13 +149,22 @@ function CredentialPanel({
     return () => {
       lifecycle.current++
       abort.abort()
+      onPendingChange?.(false)
       window.clearTimeout(expires)
     }
     // Operation closures are scoped to the participant and staff session, never to form drafts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [participant.id, eligible, session.token, session.expiresAt, retry, onExpired])
+  }, [
+    participant.id,
+    eligible,
+    session.token,
+    session.expiresAt,
+    retry,
+    onExpired,
+    onPendingChange,
+  ])
   useEffect(() => {
-    if (secret) {
+    if (currentPin) {
       reveal.current?.focus()
       hadPanel.current = true
     } else if (confirm) {
@@ -134,51 +174,143 @@ function CredentialPanel({
       actionButton.current?.focus()
       hadPanel.current = false
     }
-  }, [secret, confirm, busy])
+  }, [currentPin, confirm, busy])
+  useEffect(() => {
+    if (!mutating) return
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [mutating])
+  useEffect(() => {
+    if (!pin || pin.owner !== session.token) return
+    const operation = pin.revision
+    const run = generation.current
+    let check = 0
+    let requestController: AbortController | null = null
+    const verify = async () => {
+      const call = ++check
+      requestController?.abort()
+      const abort = new AbortController()
+      requestController = abort
+      setVerified(false)
+      if (document.visibilityState === 'hidden') return
+      try {
+        const snapshot = await read(abort.signal)
+        if (run !== generation.current || call !== check) return
+        if (snapshot.status !== 'AKTIF' || snapshot.revision !== operation) {
+          setPin(null)
+          setStatus(null)
+          setError(
+            'PIN operasi ini sudah diganti atau akses dicabut. PIN tidak ditampilkan. Muat ulang status, lalu reset dengan konfirmasi.',
+          )
+          return
+        }
+        setStatus({
+          owner: session.token,
+          value: snapshot.status,
+          revision: snapshot.revision,
+        })
+        setVerifiedAt(new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }))
+        setVerified(true)
+      } catch (failure) {
+        if (run !== generation.current || call !== check || abort.signal.aborted) return
+        setPin(null)
+        setStatus(null)
+        if (failure instanceof ApiError && [401, 403].includes(failure.status)) onExpired()
+        else
+          setError(
+            'Revisi PIN tidak dapat diverifikasi. Muat ulang status dan reset PIN; permintaan sebelumnya mungkin telah tersimpan di server.',
+          )
+      }
+    }
+    verifyAgain.current = () => {
+      void verify()
+    }
+    const timer = window.setInterval(() => {
+      void verify()
+    }, 5000)
+    const focus = () => {
+      void verify()
+    }
+    window.addEventListener('focus', focus)
+    document.addEventListener('visibilitychange', focus)
+    return () => {
+      check++
+      requestController?.abort()
+      window.clearInterval(timer)
+      window.removeEventListener('focus', focus)
+      document.removeEventListener('visibilitychange', focus)
+      verifyAgain.current = () => undefined
+    }
+    // Check the exact issuance receipt, never just AKTIF; session/participant changes invalidate checks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pin?.revision, session.token, onExpired])
   async function act(action: 'issue' | 'reset' | 'revoke') {
-    if (pending.current || disabled || !eligible || !current || secret) return
+    if (pending.current || disabled || !eligible || !current || currentPin) return
     pending.current = true
+    onPendingChange?.(true)
+    setMutating(true)
+    setVerified(false)
     setBusy(true)
     setError('')
     setNotice('')
     setConfirm(null)
     setPin(null)
     const run = generation.current
+    const operationController = controller.current!
+    const timeout = window.setTimeout(() => operationController.abort(), 30000)
     let created: string | null = null
     try {
-      const signal = controller.current!.signal
+      const signal = operationController.signal
       if (action !== 'revoke') created = generatePin()
-      await request(
+      const receipt = await request<{ data: { revision: string } }>(
         path,
         session.token,
         action === 'revoke' ? 'DELETE' : 'POST',
-        created === null ? undefined : { pin: created },
+        { ...(created === null ? {} : { pin: created }), expected_revision: status!.revision },
         signal,
       )
       if (generation.current !== run) return
       const value = await read(signal)
       if (generation.current !== run) return
-      setStatus({ owner: session.token, value })
-      if (created !== null && value === 'AKTIF')
-        setPin({ owner: session.token, value: created })
-      else if (created !== null)
-        setNotice(
-          'Status akses telah berubah. PIN tidak ditampilkan; tinjau status sebelum menerbitkan kembali.',
-        )
-      else setNotice('Pencabutan selesai. Periksa status akses terkini di atas.')
+      setStatus({ owner: session.token, value: value.status, revision: value.revision })
+      const revision = receipt.data?.revision
+      if (!revision || !revisionValid(revision)) throw new Error('Invalid operation receipt')
+      if (created !== null) {
+        if (value.status !== 'AKTIF' || value.revision !== revision) {
+          setStatus(null)
+          setError(
+            'PIN operasi ini sudah diganti atau akses dicabut. PIN tidak ditampilkan. Muat ulang status, lalu reset dengan konfirmasi.',
+          )
+          return
+        }
+        setPin({ owner: session.token, value: created, revision })
+        setVerifiedAt(new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }))
+        setVerified(true)
+      } else setNotice('Pencabutan selesai. Periksa status akses terkini di atas.')
     } catch (failure) {
       if (generation.current !== run) return
       setPin(null)
       setStatus(null)
       if (failure instanceof ApiError && [401, 403].includes(failure.status)) onExpired()
+      else if (failure instanceof ApiError && failure.status === 409)
+        setError(
+          'Revisi kredensial sudah berubah. PIN operasi ini tidak ditampilkan. Muat ulang status, lalu reset dengan konfirmasi.',
+        )
       else
         setError(
-          `${errorMessage(failure)} Muat ulang status sebelum mencoba lagi. Jika penerbitan terputus, reset PIN; PIN tidak dapat dipulihkan.`,
+          `${errorMessage(failure)} Permintaan mungkin sudah tersimpan di server; browser berhenti menunggu bukan konfirmasi pembatalan. Muat ulang status, lalu reset PIN dengan konfirmasi jika respons penerbitan hilang.`,
         )
     } finally {
+      window.clearTimeout(timeout)
       created = null
       if (generation.current === run) {
         pending.current = false
+        setMutating(false)
+        onPendingChange?.(false)
         setBusy(false)
       }
     }
@@ -205,7 +337,17 @@ function CredentialPanel({
             </p>
           )}
           {notice && <p role="status">{notice}</p>}
-          {secret ? (
+          <p>
+            Jika editor ditutup paksa, partisipan diganti, atau Anda keluar saat permintaan
+            berlangsung, operasi mungkin telah tersimpan. Muat ulang status dan reset PIN
+            dengan konfirmasi; PIN tidak dapat dipulihkan.
+          </p>
+          {mutating && (
+            <p role="status">
+              Sedang memproses akses Android. Tunggu konfirmasi sebelum menutup editor.
+            </p>
+          )}
+          {currentPin ? (
             <section
               className="pin-reveal"
               aria-label="PIN Android berhasil diterbitkan"
@@ -214,9 +356,29 @@ function CredentialPanel({
             >
               <h4>PIN Android berhasil diterbitkan</h4>
               <p>Kode responden: {participant.kode}</p>
-              <p>
-                PIN sementara: <strong className="pin-value">{secret}</strong>
-              </p>
+              {secret ? (
+                <>
+                  <p>
+                    PIN sementara: <strong className="pin-value">{secret}</strong>
+                  </p>
+                  <p>
+                    Hasil pemeriksaan revisi diterima pukul {verifiedAt} WIB. Peneliti lain
+                    dapat mengubah akses setelah pemeriksaan; verifikasi ulang sebelum
+                    menyampaikan PIN.
+                  </p>
+                </>
+              ) : (
+                <p role="status">
+                  PIN disembunyikan sampai revisi operasi diverifikasi ulang.
+                </p>
+              )}
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => verifyAgain.current()}
+              >
+                Verifikasi ulang PIN
+              </button>
               <p>
                 Catat dan sampaikan PIN kepada responden melalui prosedur aman. PIN tidak dapat
                 ditampilkan kembali setelah jendela ini ditutup.

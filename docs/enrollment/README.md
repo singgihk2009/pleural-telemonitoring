@@ -151,7 +151,9 @@ baseline, consent or research history is deleted. Save pending research-status
 edits before managing access. New enrollments receive no credentials automatically.
 
 A newly generated PIN appears once after successful issuance/reset and authorized
-status verification. Record and communicate the respondent code/PIN through the
+verification matching the committed receipt revision (AKTIF alone is insufficient).
+The check is point-in-time and the open view revalidates; use Verifikasi ulang PIN
+immediately before handoff. Record and communicate the respondent code/PIN through the
 approved secure research procedure, then close **Tutup PIN**. Closing the editor,
 changing participant, logout or session invalidation/expiry also clears it.
 There is no recovery/display-existing-PIN action: stored adaptive hashes cannot
@@ -159,9 +161,14 @@ recover plaintext. Reset again if the PIN was lost. No delivery integration is
 activated, and PINs never appear in participant lists/search/summary cards.
 
 `GET /api/v1/participants/{id}/credentials` is the new minimal, non-cacheable
-credential-status projection. Existing POST/DELETE contracts are retained. Only
+status/revision snapshot. POST/DELETE now require the latest `expected_revision`
+and return non-secret revision receipts; stale operations fail with 409. No PIN
+or hash is returned. Pending writes block ordinary editor close/Escape/save, but
+explicit logout remains available and discards plaintext immediately. Client abort
+is not confirmed server cancellation; reload status and confirm a fresh reset if
+the response was lost. Only
 active, authorized principal researchers can access these routes; controls,
 inactive participants, nurses, IT and assessors (including combined roles with
 blinding off) are rejected by server policy. The UI never guesses credential state
 when loading fails. See [full workflow/contract notes](pin-management-pr10.md) and
-[validation](validation-pr10.md).
+[latest correction validation](validation-pr10-correction.md).

@@ -63,12 +63,14 @@ export function EnrollmentForm({
   onClose,
   onSaved,
   onExpired,
+  onLogout,
 }: {
   session: Session
   participantId: string | null
   onClose: () => void
   onSaved: () => void
   onExpired: () => void
+  onLogout?: () => Promise<void>
 }) {
   const [fields, setFields] = useState<Fields>(empty)
   const [loaded, setLoaded] = useState<{
@@ -77,6 +79,7 @@ export function EnrollmentForm({
     error: string
   } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [credentialPending, setCredentialPending] = useState(false)
   const [submitError, setError] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [retry, setRetry] = useState(0)
@@ -171,6 +174,7 @@ export function EnrollmentForm({
   })
   async function submit(event: FormEvent) {
     event.preventDefault()
+    if (saving || credentialPending) return
     const invalid: Record<string, string> = {}
     for (const key of ['kode', 'tanggal_pulang', 'tanggal_consent', 'versi_consent'] as const)
       if (!fields[key].trim()) invalid[key] = 'Isian ini wajib diisi.'
@@ -246,7 +250,7 @@ export function EnrollmentForm({
         tabIndex={-1}
         ref={modal}
         onKeyDown={(event) => {
-          if (event.key === 'Escape' && !saving) onClose()
+          if (event.key === 'Escape' && !saving && !credentialPending) onClose()
         }}
       >
         <header className="modal-head">
@@ -264,7 +268,7 @@ export function EnrollmentForm({
           <button
             className="icon-button"
             onClick={onClose}
-            disabled={saving}
+            disabled={saving || credentialPending}
             aria-label="Tutup editor"
           >
             <Icon name="close" />
@@ -284,6 +288,12 @@ export function EnrollmentForm({
         ) : (
           <form onSubmit={submit} noValidate>
             <div className="form-scroll">
+              {credentialPending && (
+                <div className="info-note" role="status">
+                  <p>Tunggu konfirmasi akses Android sebelum menutup editor (maksimum 30 detik). Keluar sekarang akan menghapus tampilan PIN, tetapi bukan konfirmasi pembatalan di server. Muat ulang status dan reset PIN bila respons hilang.</p>
+                  {onLogout && <button type="button" className="secondary" onClick={() => { void onLogout() }}>Keluar dan hapus PIN</button>}
+                </div>
+              )}
               {error && (
                 <div className="error-banner" role="alert">
                   {error}
@@ -459,16 +469,17 @@ export function EnrollmentForm({
                   session={session}
                   disabled={saving || fields.status !== record.status}
                   onExpired={onExpired}
+                  onPendingChange={setCredentialPending}
                 />
               )}
             </div>
             <footer className="modal-foot">
               <small>* Wajib diisi</small>
               <div>
-                <button type="button" className="secondary" onClick={onClose} disabled={saving}>
+                <button type="button" className="secondary" onClick={onClose} disabled={saving || credentialPending}>
                   Batal
                 </button>
-                <button className="primary" disabled={saving}>
+                <button className="primary" disabled={saving || credentialPending}>
                   {saving
                     ? 'Menyimpan…'
                     : participantId

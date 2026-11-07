@@ -1,5 +1,8 @@
 # Authentication schema extension v1.1 (PR-03)
 
+PR-10 adds the [non-secret credential revision extension v1.3](credential-revisions-v1.3.md)
+without changing the historical migrations below.
+
 Additive migration `2026_11_03_000003_create_authentication_foundation.php` builds
 on PR-02 without altering its tables, constraints or immutable audit triggers.
 The [explicit grant-scope amendment v1.2](grant-scopes-v1.2.md) adds mandatory
