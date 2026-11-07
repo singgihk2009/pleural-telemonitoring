@@ -298,3 +298,9 @@ No assessment update endpoint is provided. Assessment routes share a 30/minute
 principal throttle; response caching and payload/secret logging are prohibited.
 Audit codes for submission/privileged read use opaque IDs and fixed outcome codes.
 See [architecture and recovery guarantees](../assessment/README.md).
+
+Stage B1 instrument publication reuses researcher-only deny-first enrollment
+permission and fresh staff/token checks under serialization. Approval actor/time
+are server derived; settings/options/publication/audit are atomic and immutable.
+No new patient-data access or clinical grants are implied. See the
+[publication security/rollback notes](../stage-b/instrument-publication.md).

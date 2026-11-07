@@ -44,7 +44,7 @@ class TeleNapasDemoSeeder extends Seeder
                     return false;
                 }
                 // Never adopt, change or reset an existing research/staff dataset.
-                foreach (Schema::getTables() as $table) {
+                foreach (Schema::getTables(DB::connection()->getDatabaseName()) as $table) {
                     if (! in_array($table['name'], ['migrations', 'user_roles', 'auth_rate_limits', 'auth_rate_limit_locks'], true) && DB::table($table['name'])->exists()) {
                         throw new RuntimeException('First demo initialization requires empty application tables. Use a new dedicated schema; no existing data was changed.');
                     }
