@@ -12,7 +12,7 @@ export function OfflineProvider({ children }: PropsWithChildren) {
   const available = !!(patient.session && id && revision);
   const scope = available ? `${id}:${revision}:${patient.session!.token}` : 'locked'; // Memory only; never persisted.
   const scopeRef = useRef(scope);
-  const [active, setActive] = useState(AppState.currentState !== 'background');
+  const [active, setActive] = useState(AppState.currentState === 'active');
   const activeRef = useRef(active);
   const [loaded, setLoaded] = useState<{ scope: string; queue?: Queue; record?: Record | null; error?: string } | null>(null);
   const [writing, setWriting] = useState(0); const writers = useRef(0);

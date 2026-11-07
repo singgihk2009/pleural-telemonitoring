@@ -128,7 +128,7 @@ function DailyForm() {
         {(durable?.error || error) ? <Notice>{durable?.error || error}</Notice> : null}
         {!!durable?.lockedPredecessors && <Notice>Ada salinan lokal dari kredensial sebelumnya yang tetap terkunci. Periksa riwayat server dan kebijakan pemulihan bersama tim penelitian. Tidak ada isian lama yang dihapus otomatis.</Notice>}
         {durable && !durable.available && <Notice>Server atau kredensial ini belum mendukung antrean terenkripsi. Gunakan hanya saat online; isian belum tersimpan sampai ada tanda terima server.</Notice>}
-        {durable?.enabled && <Notice>{!durable.record ? 'Penyimpanan terenkripsi siap. Belum ada draf lokal.' : durable.record.state === 'SYNCED' ? 'Tanda terima server diverifikasi.' : 'Draf/antrean disimpan terenkripsi pada perangkat. Belum tersimpan di server sampai ada tanda terima. Validitas versi dan tanggal diperiksa saat sinkronisasi.'}</Notice>}
+        {durable?.enabled && <Notice>{durable.writing ? 'Menyimpan perubahan ke penyimpanan aman. Tunggu sebelum menutup aplikasi.' : !durable.record ? 'Penyimpanan terenkripsi siap. Belum ada draf lokal.' : durable.record.state === 'SYNCED' ? 'Tanda terima server diverifikasi.' : 'Draf/antrean disimpan terenkripsi pada perangkat. Belum tersimpan di server sampai ada tanda terima. Validitas versi dan tanggal diperiksa saat sinkronisasi.'}</Notice>}
         {durable?.record && !['DRAFT','SYNCED'].includes(durable.record.state) && <Card>
           <Copy>{stateText[durable.record.state]}. {reasonText[durable.record.reason ?? ''] ?? ''}</Copy>
           <Copy>Permintaan lama tidak diubah. Isian terlambat/versi berubah perlu rekonsiliasi, bukan perubahan tanggal otomatis.</Copy>

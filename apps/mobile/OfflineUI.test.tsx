@@ -13,6 +13,7 @@ const snapshot: AssessmentStatus = { available: true, can_submit: true, study_da
   questionnaire: { version: 'SYNTHETIC_V1', questions: [{ code: 'SYNTHETIC', label: 'Item sintetis', required: true, options: [{ id: 1, label: 'Pilihan sintetis' }] }] } };
 const disk = new Map<string,string>(); const logout = jest.fn(); let stored: ReturnType<typeof receipt> | null;
 const originalOS = Platform.OS;
+const originalAppState = Object.getOwnPropertyDescriptor(AppState,'currentState')!;
 function receipt(body: Submission) { return { id: body.submission_id, date_wib: body.date_wib, study_day: 1, type: 'HARIAN', vas_mm: body.vas_mm, filled_by: body.filled_by, version: body.version, device_created_at: body.device_created_at, received_at: new Date().toISOString(), answers: body.answers.map(a => ({ ...a, value: 'SYNTHETIC_OPTION' })) }; }
 function patient(offline = false, token = 'SYNTHETIC-ONLY'): Context {
   return { ready: true, busy: false, offline, message: '', acknowledged: true,
@@ -31,6 +32,7 @@ async function fill() {
 }
 beforeEach(() => {
   process.env.EXPO_PUBLIC_API_BASE_URL = 'http://localhost:8000/api/v1';
+  Object.defineProperty(AppState,'currentState',{value:'active',configurable:true,writable:true});
   disk.clear(); stored = null; jest.clearAllMocks(); Object.defineProperty(Platform,'OS',{value:'android',configurable:true});
   jest.mocked(SecureStore.isAvailableAsync).mockResolvedValue(true);
   jest.mocked(SecureStore.getItemAsync).mockImplementation(async key => disk.get(key) ?? null);
@@ -43,7 +45,7 @@ beforeEach(() => {
     stored = receipt(body as Submission); return { data: stored, replayed: false };
   });
 });
-afterEach(() => { Object.defineProperty(Platform,'OS',{value:originalOS,configurable:true}); jest.restoreAllMocks(); });
+afterEach(() => { Object.defineProperty(AppState,'currentState',originalAppState); Object.defineProperty(Platform,'OS',{value:originalOS,configurable:true}); jest.restoreAllMocks(); });
 test('saves reviewed draft securely and shows success only after the exact server receipt', async () => {
   await render(view()); await fill();
   await fireEvent.press(screen.getByRole('button', { name: 'Simpan aman dan antrekan isian' }));
@@ -115,4 +117,17 @@ test('account switch during a pending request never sends an old body with the n
   expect(logout).not.toHaveBeenCalled(); expect(screen.queryByText('Isian berhasil tersimpan')).toBeNull();
   const posts = jest.mocked(request).mock.calls.filter(call => call[0] === '/patient/assessments');
   expect(posts).toHaveLength(1); expect(posts[0][1]).toBe('SYNTHETIC-ONLY');
+});
+
+
+test('unknown initial AppState cannot start a worker until foreground is observed', async () => {
+  Object.defineProperty(AppState,'currentState',{value:null,configurable:true,writable:true});
+  const listeners: ((state: AppStateStatus) => void)[] = [];
+  jest.spyOn(AppState,'addEventListener').mockImplementation((_event,listener) => { listeners.push(listener); return {remove:jest.fn()}; });
+  await render(view()); await fill();
+  await fireEvent.press(screen.getByRole('button', { name: 'Simpan aman dan antrekan isian' }));
+  await screen.findByText(/Belum ada tanda terima server/);
+  expect(jest.mocked(request).mock.calls.filter(call => call[0] === '/patient/assessments')).toHaveLength(0);
+  await act(() => listeners.forEach(listener => listener('active')));
+  await screen.findByText('Isian berhasil tersimpan');
 });
