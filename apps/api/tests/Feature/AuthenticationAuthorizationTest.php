@@ -85,6 +85,22 @@ class AuthenticationAuthorizationTest extends TestCase
         return $this->callAs(null, 'POST', '/auth/patient/login', ['code' => $credential->participant->kode, 'pin' => $pin]);
     }
 
+    public function test_patient_identity_exposes_only_nonsecret_revision_and_rotates_after_pin_reset(): void
+    {
+        $patient = PatientCredential::factory()->create(['pin_hash' => '012345']);
+        $oldToken = $this->token($patient);
+        $revision = $patient->revision;
+        $this->callAs($oldToken, 'GET', '/auth/me')->assertOk()->assertJsonPath('data.credential_revision', $revision)->assertDontSee('pin_hash')->assertDontSee('012345');
+        $patient->update(['pin_hash' => '654321']);
+        $this->assertNotSame($revision, $patient->revision);
+        $this->callAs($oldToken, 'GET', '/auth/me')->assertUnauthorized();
+        $this->callAs($this->token($patient), 'GET', '/auth/me')->assertOk()->assertJsonPath('data.credential_revision', $patient->revision);
+        $staff = $this->staff(ResearchRoleCode::Researcher);
+        $this->callAs($this->token($staff), 'GET', '/auth/me')->assertOk()->assertJsonMissingPath('data.credential_revision');
+        DB::table('patient_credentials')->where('responden_id', $patient->responden_id)->update(['revision' => null]);
+        $this->callAs($this->token($patient->fresh()), 'GET', '/auth/me')->assertOk()->assertJsonPath('data.credential_revision', null);
+    }
+
     public function test_staff_login_issues_hashed_expiring_sanctum_token_and_no_cookie(): void
     {
         $staff = $this->staff(ResearchRoleCode::Researcher);

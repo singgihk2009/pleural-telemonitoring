@@ -14,6 +14,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public retryAfterMs = 0,
   ) {
     super(message);
   }
@@ -44,6 +45,7 @@ export async function request<T>(path: string, token?: string, body?: object): P
             : response.status === 403
               ? 'Akses tidak diizinkan. Hubungi tim penelitian.'
               : 'Layanan belum dapat memproses permintaan. Coba lagi.',
+        retryAfter(response.headers?.get?.('Retry-After')),
       );
     return (await response.json()) as T;
   } catch (error) {
@@ -53,8 +55,14 @@ export async function request<T>(path: string, token?: string, body?: object): P
     clearTimeout(timeout);
   }
 }
+export function retryAfter(value: string | null | undefined): number {
+  if (!value) return 0;
+  const seconds = Number(value);
+  const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now();
+  return Number.isFinite(delay) ? Math.max(0, delay) : 0;
+}
 export type Session = { token: string; expires: string };
-export type Profile = { id: string; status: string; tanggal_pulang: string };
+export type Profile = { id: string; status: string; tanggal_pulang: string; credential_revision?: string | null };
 export function studyDay(discharge: string, now = new Date()): number | null {
   // Existing Laravel immutable_date responses serialize as UTC midnight.
   if (!/^\d{4}-\d{2}-\d{2}(T00:00:00(?:\.0+)?Z)?$/.test(discharge)) return null;

@@ -1,3 +1,4 @@
+import { useOfflineQueue } from './offline/context';
 import { DailyAssessment, AssessmentHistory } from './DailyAssessment';
 export { VasControl } from './VasControl';
 import { useEffect, useState, type PropsWithChildren } from 'react';
@@ -157,6 +158,7 @@ function Home() {
   const session = usePatient();
   const day = useDay();
   const closed = day !== null && day > 30;
+  const queue = useOfflineQueue();
   return (
     <Frame title={closed ? 'Pemantauan selesai' : 'Beranda'} step="PEMANTAUAN ANDA" back={false}>
       <Card style={{ backgroundColor: '#E6EFFA' }}>
@@ -175,6 +177,10 @@ function Home() {
             : 'Hari 0 adalah tanggal pulang. Pergantian hari mengikuti WIB.'}
         </Copy>
       </Card>
+      {queue?.record && <Card>
+        <Copy>Antrean perangkat: {queue.record.state === 'SYNCED' ? 'tanda terima server sudah diverifikasi' : 'isian lokal, belum dikonfirmasi server'} · {queue.record.body.date_wib}</Copy>
+        <Button title="Buka draf / rekonsiliasi" secondary onPress={() => router.push('/daily')} />
+      </Card>}
       {!closed && (
         <>
           <Button
@@ -234,8 +240,9 @@ function Home() {
   );
 }
 export function DailyScreen() {
+  const queue = useOfflineQueue();
   return (
-    <Protected>
+    <Protected final={!!queue?.record}>
       <DailyAssessment />
     </Protected>
   );

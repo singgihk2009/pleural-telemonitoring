@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, View } from 'react-native';
 import { router } from 'expo-router';
+import { stateText, reasonText } from './offline/labels';
+import { useOfflineQueue } from './offline/context';
 import { usePatient } from './context';
 import { Button, Card, Copy, Frame, Heading, Notice } from './ui';
 import { VasControl } from './VasControl';
@@ -13,6 +15,8 @@ export function DailyAssessment() {
 }
 function DailyForm() {
   const patient = usePatient();
+  const durable = useOfflineQueue();
+  const form = useRef<{ value: number | null; filledBy: 'PASIEN' | 'KELUARGA' | null; answers: Record<string, number> }>({ value: null, filledBy: null, answers: {} });
   const api = useRef(patient.api);
   useEffect(() => { api.current = patient.api; }, [patient.api]);
   const mounted = useRef(true);
@@ -37,22 +41,64 @@ function DailyForm() {
   }, []);
   useEffect(() => {
     let active = true;
-    void api.current<{ data: AssessmentStatus }>('/patient/assessments/status').then(result => {
-      if (active) { setState(result.data); setError(''); }
+    if (durable?.loading) return;
+    if (durable?.available && !durable.enabled) {
+      setLoading(false); setError(durable.error || 'Penyimpanan terenkripsi belum tersedia; pengiriman dihentikan.');
+      return;
+    }
+    const saved = durable?.record;
+    if (saved) {
+      const fields = { value: saved.body.vas_mm, filledBy: saved.body.filled_by,
+        answers: Object.fromEntries(saved.body.answers.map(a => [a.code, a.option_id])) };
+      form.current = fields; setValue(fields.value); setFilledBy(fields.filledBy); setAnswers(fields.answers);
+      setState(saved.snapshot); setLoading(false);
+      if (saved.state === 'SYNCED' && saved.receipt) setSuccess(saved.receipt);
+      else { setSuccess(null); setAttempt(saved.state !== 'DRAFT'); if (saved.state !== 'DRAFT') setStep('confirm'); }
+      return;
+    }
+    void api.current<{ data: AssessmentStatus }>('/patient/assessments/status').then(async result => {
+      if (!active) return;
+      if (durable?.enabled && result.data.available && result.data.can_submit) {
+        const saved = await durable.initialize(result.data);
+        if (!saved || !active) return;
+        setState(saved.snapshot);
+      } else setState(result.data);
+      if (active) setError('');
     }).catch(failure => { if (active) setError(assessmentError(failure)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [revision]);
+    // Record body updates are serialized by the queue; only restore at lifecycle/state boundaries.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revision, durable?.loading, durable?.enabled, durable?.scope, durable?.record?.state, durable?.record?.body.submission_id]);
+  function change(patch: Partial<typeof form.current>) {
+    const next = { ...form.current, ...patch }; form.current = next;
+    setValue(next.value); setFilledBy(next.filledBy); setAnswers(next.answers);
+    if (durable?.enabled) void durable.update({ vas_mm: next.value, filled_by: next.filledBy,
+      answers: Object.entries(next.answers).map(([code, option_id]) => ({ code, option_id })) });
+  }
+  function discard() {
+    Alert.alert('Buang isian lokal?', 'Isian yang belum tersinkron tidak dapat dipulihkan. Ini tidak membatalkan permintaan yang mungkin sudah tersimpan di server. Periksa riwayat terlebih dahulu.', [
+      { text: 'Batal', style: 'cancel' }, { text: 'Buang lokal', style: 'destructive', onPress: () => {
+        void durable?.discard(true).then(() => { setSuccess(null); setAttempt(false); setValue(null); setAnswers({}); setFilledBy(null); setState(null); setStep('vas'); setLoading(true); setRevision(r => r + 1); });
+      } },
+    ]);
+  }
   function reload() {
     if (busyRef.current) return;
+    if (durable?.record && durable.record.state !== 'DRAFT') { void durable.synchronize(true); return; }
     pending.current = null; setAttempt(false); setLoading(true);
     setValue(null); setAnswers({}); setFilledBy(null); setStep('vas'); setState(null);
     setRevision(r => r + 1);
   }
   async function submit() {
-    if (busyRef.current || patient.offline || !state?.questionnaire || value === null || !filledBy) return;
+    if (busyRef.current || (patient.offline && !durable?.enabled) || !state?.questionnaire || value === null || !filledBy) return;
     busyRef.current = true; setBusy(true); setError('');
     try {
+      if (durable?.enabled) {
+        const queued = await durable.confirm();
+        if (queued) { setAttempt(true); await durable.synchronize(true); }
+        return;
+      }
       // A stable UUID and immutable body survive timeouts while this screen remains mounted.
       pending.current ??= {
         submission_id: state.submission_id, version: state.questionnaire.version,
@@ -77,15 +123,26 @@ function DailyForm() {
   return (
     <Frame title={success ? 'Terkirim' : step === 'vas' ? 'Isi harian' : step === 'confirm' ? 'Konfirmasi isian' : 'Gejala hari ini'}
       step="F3 · ISIAN HARIAN"
-      onBack={busy || attempt ? () => {} : step !== 'vas' ? () => setStep(step === 'confirm' ? 'symptoms' : 'vas') : undefined}>
+      onBack={durable?.enabled && attempt ? () => router.replace('/') : busy || attempt ? () => {} : step !== 'vas' ? () => setStep(step === 'confirm' ? 'symptoms' : 'vas') : undefined}>
       {!visible ? <Notice>Isian disembunyikan saat aplikasi tidak aktif.</Notice> : <>
-        {error ? <Notice>{error}</Notice> : null}
+        {(durable?.error || error) ? <Notice>{durable?.error || error}</Notice> : null}
+        {!!durable?.lockedPredecessors && <Notice>Ada salinan lokal dari kredensial sebelumnya yang tetap terkunci. Periksa riwayat server dan kebijakan pemulihan bersama tim penelitian. Tidak ada isian lama yang dihapus otomatis.</Notice>}
+        {durable && !durable.available && <Notice>Server atau kredensial ini belum mendukung antrean terenkripsi. Gunakan hanya saat online; isian belum tersimpan sampai ada tanda terima server.</Notice>}
+        {durable?.enabled && <Notice>{!durable.record ? 'Penyimpanan terenkripsi siap. Belum ada draf lokal.' : durable.record.state === 'SYNCED' ? 'Tanda terima server diverifikasi.' : 'Draf/antrean disimpan terenkripsi pada perangkat. Belum tersimpan di server sampai ada tanda terima. Validitas versi dan tanggal diperiksa saat sinkronisasi.'}</Notice>}
+        {durable?.record && !['DRAFT','SYNCED'].includes(durable.record.state) && <Card>
+          <Copy>{stateText[durable.record.state]}. {reasonText[durable.record.reason ?? ''] ?? ''}</Copy>
+          <Copy>Permintaan lama tidak diubah. Isian terlambat/versi berubah perlu rekonsiliasi, bukan perubahan tanggal otomatis.</Copy>
+          {durable.record.nextAttemptAt > 0 && <Copy>Percobaan berikutnya paling cepat {new Date(durable.record.nextAttemptAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB. Setelah lima percobaan otomatis, periksa kembali secara manual.</Copy>}
+          <Button title="Periksa server / sinkronkan" secondary disabled={patient.offline || durable.syncing || durable.writing} onPress={() => { void durable.synchronize(true); }} />
+          <Button title="Buang isian lokal…" secondary disabled={durable.syncing || durable.writing} onPress={discard} />
+        </Card>}
         {loading ? <ActivityIndicator accessibilityLabel="Memuat assessment" /> : success ? <Card>
           <Heading>Isian berhasil tersimpan</Heading>
           <Copy>Hari {success.study_day} · {success.date_wib}</Copy>
           <Copy>Diterima server: {new Date(success.received_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB</Copy>
           <Copy>Ini bukti penyimpanan, bukan hasil penilaian klinis. Tidak ada klasifikasi atau peringatan otomatis.</Copy>
           <Button title="Lihat riwayat" onPress={() => router.replace('/history')} />
+          {durable?.enabled && <Button title="Mulai isian baru / periksa tanggal server" secondary onPress={discard} />}
         </Card> : !state ? <Button title="Muat ulang status" onPress={reload} /> : state.submitted ? <Card>
           <Heading>Isian hari ini sudah tersimpan</Heading>
           <Copy>Hari {state.submitted.study_day} · {state.submitted.date_wib}</Copy>
@@ -94,7 +151,7 @@ function DailyForm() {
           : !state.can_submit ? <Notice>Pengisian tidak tersedia pada hari penelitian ini.</Notice>
           : step === 'vas' ? <>
             <Copy>Hari {state.study_day} · {state.date_wib} WIB</Copy>
-            <VasControl value={value} onChange={setValue} />
+            <VasControl value={value} onChange={value => change({ value })} />
             <Button title="Lanjut" disabled={value === null} onPress={() => setStep('symptoms')} />
           </> : step === 'symptoms' ? <>
             <Copy>Versi instrumen: {questionnaire.version}</Copy>
@@ -102,23 +159,23 @@ function DailyForm() {
               <Heading>{q.label}{q.required ? ' *' : ' (opsional)'}</Heading>
               <View style={{ gap: 12 }}>{q.options.map(option => <Button key={option.id}
                 title={`${answers[q.code] === option.id ? '✓ ' : ''}${option.label}`}
-                secondary={answers[q.code] !== option.id} onPress={() => setAnswers(a => ({ ...a, [q.code]: option.id }))} />)}</View>
+                secondary={answers[q.code] !== option.id} onPress={() => change({ answers: { ...form.current.answers, [q.code]: option.id } })} />)}</View>
             </Card>)}
             <Card><Heading>Diisi oleh *</Heading>
-              <Button title={filledBy === 'PASIEN' ? '✓ Pasien' : 'Pasien'} secondary={filledBy !== 'PASIEN'} onPress={() => setFilledBy('PASIEN')} />
-              <Button title={filledBy === 'KELUARGA' ? '✓ Keluarga' : 'Keluarga'} secondary={filledBy !== 'KELUARGA'} onPress={() => setFilledBy('KELUARGA')} />
+              <Button title={filledBy === 'PASIEN' ? '✓ Pasien' : 'Pasien'} secondary={filledBy !== 'PASIEN'} onPress={() => change({ filledBy: 'PASIEN' })} />
+              <Button title={filledBy === 'KELUARGA' ? '✓ Keluarga' : 'Keluarga'} secondary={filledBy !== 'KELUARGA'} onPress={() => change({ filledBy: 'KELUARGA' })} />
             </Card>
             {!complete && <Copy>Lengkapi semua isian bertanda *.</Copy>}
-            <Button title="Periksa isian" disabled={!complete} onPress={() => setStep('confirm')} />
+            <Button title="Periksa isian" disabled={!complete || durable?.writing || !!durable?.error} onPress={() => setStep('confirm')} />
           </> : <Card>
             <Heading>Periksa sebelum mengirim</Heading>
             <Copy>Hari {state.study_day} · {state.date_wib} · VAS {value} mm · {filledBy}</Copy>
             {questionnaire.questions.map(q => <Copy key={q.code}>{q.label}: {q.options.find(o => o.id === answers[q.code])?.label ?? 'Tidak diisi'}</Copy>)}
             <Copy>Jawaban yang sudah tersimpan tidak dapat diedit. Pengiriman ini tidak menghasilkan keputusan klinis.</Copy>
-            {attempt && <Notice>Pengiriman sebelumnya mungkin telah tersimpan. Coba lagi memakai identitas dan isian yang sama. Jika layar ditutup atau sesi berakhir, muat status dan riwayat sebelum mengisi kembali.</Notice>}
-            <Button title={busy ? 'Mengirim…' : attempt ? 'Coba kirim lagi dengan isian sama' : 'Kirim isian'} disabled={busy || patient.offline} onPress={() => { void submit(); }} />
+            {attempt && !durable?.enabled && <Notice>Pengiriman sebelumnya mungkin telah tersimpan. Coba lagi memakai identitas dan isian yang sama. Jika layar ditutup atau sesi berakhir, muat status dan riwayat sebelum mengisi kembali.</Notice>}
+            <Button title={durable?.enabled ? 'Simpan aman dan antrekan isian' : busy ? 'Mengirim…' : attempt ? 'Coba kirim lagi dengan isian sama' : 'Kirim isian'} disabled={busy || durable?.syncing || durable?.writing || !!durable?.error || (patient.offline && !durable?.enabled) || (durable?.enabled && attempt)} onPress={() => { void submit(); }} />
             <Button title="Ubah isian" secondary disabled={busy || attempt} onPress={() => setStep('symptoms')} />
-            {!busy && attempt && <Button title="Muat ulang status" secondary onPress={reload} />}
+            {!busy && attempt && !durable?.enabled && <Button title="Muat ulang status" secondary onPress={reload} />}
           </Card>}
         {busy && <Notice>Menunggu server. Jangan tutup layar. Menutup aplikasi tidak membatalkan penyimpanan server.</Notice>}
       </>}
