@@ -298,3 +298,14 @@ No assessment update endpoint is provided. Assessment routes share a 30/minute
 principal throttle; response caching and payload/secret logging are prohibited.
 Audit codes for submission/privileged read use opaque IDs and fixed outcome codes.
 See [architecture and recovery guarantees](../assessment/README.md).
+
+### B2 encrypted pending assessments
+
+Patient-only profile metadata exposes the existing opaque credential revision for
+local namespace isolation, never a PIN/hash. Staff profile responses omit it.
+Exact UUID history lookup retains owner scoping and all existing credential checks.
+Offline data is unlocked only after server identity/revision validation. Transport
+captures the original token, foreground scope changes stop further sends, and an
+in-flight request may still commit. Logout hides RAM state immediately and preserves
+encrypted uncertain copies. No offline remote-revocation/secure-flash-erasure claim.
+See [queue security and rollback limits](../stage-b/offline-sync.md).
