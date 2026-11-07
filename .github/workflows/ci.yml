@@ -69,6 +69,14 @@ jobs:
           DB_PASSWORD: root_test_only
       - run: composer lint
       - run: composer test
+      - name: Concurrent patient credential operations in a disposable schema
+        run: |
+          php -r '$pdo = new PDO("mysql:host=127.0.0.1", "root", "root_test_only"); $pdo->exec("CREATE DATABASE pleural_credential_concurrency_test"); $pdo->exec("GRANT ALL ON pleural_credential_concurrency_test.* TO pleural");'
+          DB_DATABASE=pleural_credential_concurrency_test DB_USERNAME=root DB_PASSWORD=root_test_only php artisan migrate --force
+          DB_DATABASE=pleural_credential_concurrency_test php tests/Concurrency/credential_operations.php
+        env:
+          APP_ENV: testing
+          BCRYPT_ROUNDS: '4'
       - name: Migration rollback and reapply in a separate empty schema
         run: |
           php -r '$pdo = new PDO("mysql:host=127.0.0.1", "root", "root_test_only"); $pdo->exec("CREATE DATABASE pleural_migration_test"); $pdo->exec("CREATE DATABASE pleural_auth_migration_test"); $pdo->exec("CREATE DATABASE pleural_grant_scope_migration_test");'

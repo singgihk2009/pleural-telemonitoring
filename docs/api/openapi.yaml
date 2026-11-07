@@ -476,19 +476,94 @@ paths:
           type: string
           format: uuid
   /api/v1/participants/{participant}/credentials:
-    post:
-      operationId: issuePatientCredential
-      summary: Issue or reset an intervention patient PIN
-      description: Principal researcher only, never an IT or blinded-assessor role combination. Exactly
-        six ASCII digits are hashed before persistence; the PIN is not returned. Reset revokes all existing
-        patient sessions.
-      tags:
-      - Access management
+    get:
+      operationId: getPatientCredentialStatus
+      summary: Read a consistent credential status and non-secret revision
+      description: Active principal researcher only for active intervention participants; IT and assessor
+        combinations are always denied. One indexed snapshot read without an exclusive participant lock
+        or successful-read audit insertion. Permission denials remain audited. No PIN, hash, token or
+        issuer metadata is returned. The snapshot is not a promise against later authorized changes.
+      tags: [Access management]
       security:
       - bearerAuth: []
+      parameters:
+      - name: participant
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Non-cacheable status/revision snapshot. Null revision means no credential or a legacy row.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required: [status, revision]
+                    properties:
+                      status:
+                        type: string
+                        enum: [BELUM_DITERBITKAN, AKTIF, DICABUT]
+                      revision:
+                        $ref: '#/components/schemas/CredentialRevision'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: issuePatientCredential
+      summary: Issue or reset a PIN with an expected credential revision
+      description: Principal researcher only, never IT or assessor combinations. Six ASCII digits as a
+        string are hashed; plaintext and hashes are never returned. The required expected_revision must
+        match the stored revision under the participant lock before any hash/token/audit mutation.
+        Stale writes return 409 without changes. Successful reset requires a different PIN and revokes
+        prior sessions. The receipt identifies the committed revision; compare it with a fresh active
+        snapshot before disclosure. A lost or aborted browser response is not server cancellation.
+      tags: [Access management]
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [pin, expected_revision]
+              properties:
+                pin:
+                  type: string
+                  format: password
+                  pattern: ^[0-9]{6}$
+                  minLength: 6
+                  maxLength: 6
+                expected_revision:
+                  $ref: '#/components/schemas/CredentialRevision'
+      parameters:
+      - name: participant
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '201':
-          description: Success.
+          description: Committed non-secret revision receipt; never a PIN or hash.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialMutationReceipt'
+        '409':
+          description: Stale revision; no mutation committed. Reload status and explicitly confirm a new operation.
           content:
             application/json:
               schema:
@@ -501,6 +576,15 @@ paths:
           $ref: '#/components/responses/InvalidRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: revokePatientCredential
+      summary: Revoke Android access with an expected credential revision
+      description: Same researcher/participant restrictions as issuance. The revision is checked under
+        the participant lock; stale revocations return 409 before token deletion or audit mutation.
+        A successful revocation invalidates sessions and preserves participant/research records.
+      tags: [Access management]
+      security:
+      - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -508,35 +592,26 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required:
-              - pin
+              required: [expected_revision]
               properties:
-                pin:
-                  type: string
-                  format: password
-                  pattern: ^[0-9]{6}$
-                  minLength: 6
-                  maxLength: 6
+                expected_revision:
+                  $ref: '#/components/schemas/CredentialRevision'
       parameters:
       - name: participant
         in: path
         required: true
-        description: Opaque participant UUID. Every request is checked against current policy.
         schema:
           type: string
           format: uuid
-    delete:
-      operationId: revokePatientCredential
-      summary: Revoke patient app access
-      description: Principal researcher only. Revokes the credential and all patient tokens. Controls
-        cannot have app credentials.
-      tags:
-      - Access management
-      security:
-      - bearerAuth: []
       responses:
         '200':
-          description: Success.
+          description: Committed revocation revision receipt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialMutationReceipt'
+        '409':
+          description: Credential changed; no revocation committed. Reload status before confirming again.
           content:
             application/json:
               schema:
@@ -545,16 +620,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
         '404':
           $ref: '#/components/responses/NotFound'
-      parameters:
-      - name: participant
-        in: path
-        required: true
-        description: Opaque participant UUID. Every request is checked against current policy.
-        schema:
-          type: string
-          format: uuid
   /api/v1/staff/{staff}/tokens:
     delete:
       operationId: revokeStaffSessions
@@ -882,6 +951,28 @@ paths:
           format: uuid
 components:
   schemas:
+    CredentialRevision:
+      type: [string, 'null']
+      format: uuid
+      description: Non-secret random credential version, independent of PIN/hash. Send the exact latest
+        GET revision as expected_revision, including explicit null for no credential or a legacy row.
+        Missing or malformed versions return 422; a stale version returns 409. Not an authentication token.
+    CredentialMutationReceipt:
+      type: object
+      additionalProperties: false
+      required: [message, data]
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+          additionalProperties: false
+          required: [revision]
+          properties:
+            revision:
+              type: string
+              format: uuid
+              description: Committed credential revision. No plaintext or hash is returned.
     ReadyHealth:
       type: object
       additionalProperties: false

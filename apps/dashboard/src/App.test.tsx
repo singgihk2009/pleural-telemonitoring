@@ -353,3 +353,82 @@ test('logout clears local participant data even when server revocation cannot be
     'Keluar dari perangkat ini. Pencabutan sesi server belum dapat dikonfirmasi.',
   )
 })
+
+test('researcher manages Android PIN inside the existing participant editor without saving enrollment', async () => {
+  let status = 'BELUM_DITERBITKAN'
+  let revision: string | null = null
+  overrides = (path, method) => {
+    if (path !== `/participants/${participant.id}/credentials`) return undefined
+    if (method === 'POST') { status = 'AKTIF'; revision = '00000000-0000-4000-8000-000000000001'; return json({ message: 'Success', data: { revision } }, 201) }
+    if (method === 'DELETE') { status = 'DICABUT'; revision = '00000000-0000-4000-8000-000000000002'; return json({ message: 'Success', data: { revision } }) }
+    return json({ data: { status, revision } })
+  }
+  await signIn(); await screen.findByText(participant.kode)
+  fireEvent.click(screen.getByRole('button', { name: `Ubah partisipan ${participant.kode}` }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Terbitkan PIN Android' }))
+  const reveal = await screen.findByRole('region', { name: 'PIN Android berhasil diterbitkan' })
+  expect(within(reveal).getByText(participant.kode, { exact: false })).toBeTruthy()
+  expect(calls.find(c => c.path.endsWith('/credentials') && c.method === 'POST')?.data.pin).toMatch(/^[0-9]{6}$/)
+  expect(calls.some(c => c.method === 'PATCH')).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: 'Tutup editor' }))
+  expect(screen.queryByRole('region', { name: 'PIN Android berhasil diterbitkan' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: `Ubah partisipan ${participant.kode}` }))
+  await screen.findByRole('button', { name: 'Reset PIN Android' })
+  expect(screen.queryByRole('region', { name: 'PIN Android berhasil diterbitkan' })).toBeNull()
+})
+
+test('credential denial invalidates staff session without revealing PIN', async () => {
+  overrides = (path, method) => path.endsWith('/credentials') ?
+    method === 'GET' ? json({ data: { status: 'BELUM_DITERBITKAN', revision: null } }) : json({}, 403) : undefined
+  await signIn(); await screen.findByText(participant.kode)
+  fireEvent.click(screen.getByRole('button', { name: `Ubah partisipan ${participant.kode}` }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Terbitkan PIN Android' }))
+  await screen.findByRole('button', { name: 'Masuk ke ruang penelitian' })
+  expect(screen.queryByRole('region', { name: 'PIN Android berhasil diterbitkan' })).toBeNull()
+})
+
+test('ordinary editor close, Escape and enrollment save cannot discard a pending successful PIN', async () => {
+  let status = 'BELUM_DITERBITKAN'
+  let revision: string | null = null
+  let release!: (response: Response) => void
+  overrides = (path, method) => {
+    if (path !== `/participants/${participant.id}/credentials`) return undefined
+    if (method === 'POST') return new Promise<Response>(done => { release = done })
+    return json({ data: { status, revision } })
+  }
+  await signIn(); await screen.findByText(participant.kode)
+  fireEvent.click(screen.getByRole('button', { name: `Ubah partisipan ${participant.kode}` }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Terbitkan PIN Android' }))
+  const editor = screen.getByRole('dialog')
+  expect(screen.getByRole('button', { name: 'Tutup editor' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: 'Simpan perubahan' }).hasAttribute('disabled')).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Tutup editor' }))
+  fireEvent.keyDown(editor, { key: 'Escape' })
+  expect(screen.getByRole('dialog')).toBe(editor)
+  const pending = calls.find(c => c.path.endsWith('/credentials') && c.method === 'POST')
+  expect(pending?.options.signal?.aborted).toBe(false)
+  status = 'AKTIF'; revision = '00000000-0000-4000-8000-000000000001'
+  release(json({ message: 'Success', data: { revision } }, 201))
+  await screen.findByRole('region', { name: 'PIN Android berhasil diterbitkan' })
+  expect(screen.getByRole('button', { name: 'Tutup editor' }).hasAttribute('disabled')).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: 'Tutup editor' }))
+  expect(screen.queryByRole('region', { name: 'PIN Android berhasil diterbitkan' })).toBeNull()
+})
+
+test('explicit logout remains available while a credential write is pending and discards its late receipt', async () => {
+  let release!: (response: Response) => void
+  overrides = (path, method) => {
+    if (!path.endsWith('/credentials')) return undefined
+    if (method === 'POST') return new Promise<Response>(done => { release = done })
+    return json({ data: { status: 'BELUM_DITERBITKAN', revision: null } })
+  }
+  await signIn(); await screen.findByText(participant.kode)
+  fireEvent.click(screen.getByRole('button', { name: `Ubah partisipan ${participant.kode}` }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Terbitkan PIN Android' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Keluar dan hapus PIN' }))
+  await screen.findByRole('button', { name: 'Masuk ke ruang penelitian' })
+  release(json({ data: { revision: '00000000-0000-4000-8000-000000000001' } }, 201))
+  await waitFor(() => expect(calls.some(c => c.path === '/auth/logout')).toBe(true))
+  expect(screen.queryByRole('region', { name: 'PIN Android berhasil diterbitkan' })).toBeNull()
+  expect(screen.queryByRole('dialog')).toBeNull()
+})

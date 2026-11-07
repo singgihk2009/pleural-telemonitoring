@@ -52,7 +52,7 @@ class ParticipantPolicy
 
     public function manageCredentials(Authenticatable $actor, Participant $participant): bool
     {
-        return $this->access->researcher($actor) && $participant->kelompok === 'INTERVENSI' && $participant->status === 'AKTIF';
+        return $this->access->researcher($actor) && ! $actor->hasRole(ResearchRoleCode::Assessor) && $participant->kelompok === 'INTERVENSI' && $participant->status === 'AKTIF';
     }
 
     public function grantIdentifiedAccess(Authenticatable $actor, Participant $participant): bool

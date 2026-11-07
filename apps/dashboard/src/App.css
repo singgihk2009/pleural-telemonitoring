@@ -1326,3 +1326,10 @@ tbody tr:hover {
     transition: none !important;
   }
 }
+
+/* Credential material exists only in this temporary editor region. */
+.credential-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.pin-reveal { padding: 20px; border: 1px solid var(--border, #d6deea); border-radius: 12px; background: #fff8df; overflow-wrap: anywhere; }
+.pin-value { font-family: monospace; font-size: 1.5rem; letter-spacing: .15em; }
+.pin-confirm { display: block; }
+.android-access button { min-height: 44px; }

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
 class PatientCredential extends Authenticatable
@@ -31,6 +32,11 @@ class PatientCredential extends Authenticatable
 
     protected static function booted(): void
     {
+        static::saving(function (self $credential): void {
+            if (! $credential->exists || $credential->isDirty(['pin_hash', 'revoked_at']) || $credential->revision === null) {
+                $credential->revision = (string) Str::uuid();
+            }
+        });
         static::updated(function (self $credential): void {
             if ($credential->wasChanged(['pin_hash', 'revoked_at'])) {
                 $credential->tokens()->delete();

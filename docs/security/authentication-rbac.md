@@ -59,11 +59,21 @@ name/email/password. Host operators must protect console/database access; this
 command is not an unauthenticated web route. It never creates patient credentials.
 
 A non-blinded principal researcher issues/resets a PIN through
-`POST /participants/{participant}/credentials`. The request contains the new PIN;
-the response never returns it. The researcher communicates it using a separately
+`POST /participants/{participant}/credentials`. The request contains the new PIN and required expected_revision;
+the response never returns it. PR-10 adds the researcher dashboard workflow and a
+policy-protected GET on the same path returning credential status and a non-secret
+random revision. POST/DELETE compare the expected revision under their write locks
+and return a committed revision receipt; stale writes fail with 409 before changes.
+The researcher communicates it using a separately
 approved secure process, not FCM/WhatsApp. Issuance requires an active intervention
 participant; the composite FK and CHECK also reject control credentials at the
-database layer. Reset revokes prior tokens. DELETE on the same path revokes the
+database layer. Reset requires a different PIN and revokes prior tokens. Status values are exactly
+`BELUM_DITERBITKAN`, `AKTIF`, and `DICABUT`; revoked rows remain stored, so no
+never-issued state is inferred from a deleted record. GET, POST and DELETE all
+require current active intervention eligibility and exclude any assessor or IT
+role combination regardless of blinding. Issuance/reset/revoke events remain transactionally audited. Status snapshots are
+non-cacheable indexed reads without exclusive participant locks or repetitive
+success-read audits; permission denials remain audited. DELETE on the same path revokes the
 credential and its sessions. Participant/credential locks serialize these
 operations with login, so reset cannot leave a concurrently issued old-PIN token.
 
@@ -81,7 +91,7 @@ relationships or hidden credential fields.
 | PERAWAT_PEMANTAU | Intervention participants with a currently active PEMANTAU assignment | Assigned only | Assigned only | Assigned only | No credential/grant authority |
 | PERAWAT_CADANGAN | Intervention participants with a currently active CADANGAN assignment | Assigned only | Assigned only | Assigned only | No inherited access to all cases |
 | PENELITI_UTAMA | Both groups | Yes | Yes (controls have no daily reports) | Both groups | Issue/revoke patient credentials; separately authorize IT |
-| PENILAI_HASIL | Both groups, projected summary | Never | Denied when blinded; pseudonymous reads when unblinded | Both groups | No credential/grant authority while blinded |
+| PENILAI_HASIL | Both groups, projected summary | Never | Denied when blinded; pseudonymous reads when unblinded | Both groups | No patient credential authority; no grant authority while blinded |
 | ADMIN_IT | CLINICAL_READ grant for summaries/list | CONTACT grant only | CLINICAL_READ grant only | CLINICAL_READ grant only | Revoke staff sessions; no self-grant; TECHNICAL grants no patient reads |
 
 Monitoring paths are `entries`, `classifications`, `alerts`, `follow-ups` beneath
@@ -94,8 +104,9 @@ notification. Existing records remain subject to immutable database constraints.
 
 Deny-first rules apply across role combinations: any ADMIN_IT role still requires
 an explicit matching participant scope even alongside PENELITI_UTAMA. Any blinded-assessor
-role denies monitoring and credentials/grant issuance even alongside researcher
-or nurse roles. Assessors never gain contact access through another role. A
+role denies monitoring and grant issuance even alongside researcher or nurse
+roles. Any assessor role denies patient credential status/issuance/reset/revocation
+even with blinding disabled. Assessors never gain contact access through another role. A
 PASIEN_KELUARGA assignment on a staff account is not a patient identity and cannot
 authenticate as staff; patient role identity comes only from the separate credential.
 There is no public role-assignment endpoint or self-escalation operation.
@@ -228,3 +239,40 @@ PR-04 enrollment access denies every PENILAI_HASIL role combination regardless o
 show, update and search share this restriction. Editor serialization additionally
 authorizes `viewContact` before loading/decrypting contacts. Existing contact
 policy/query restrictions and ADMIN_IT scope requirements remain unchanged.
+
+
+## PR-10 browser PIN handling
+
+The enrollment editor's Android access section loads authoritative status before
+showing actions. It is limited to the existing authorized researcher workspace;
+the API independently checks the credential policy before reading or writing.
+Controls and inactive intervention participants have no issuance/reset actions;
+the editor accurately says their credential status is not loaded. Inactivation
+continues to revoke sessions through the existing enrollment workflow; it does
+not erase credentials or history.
+
+`crypto.getRandomValues` with rejection sampling generates an unbiased six-digit
+string, including leading zeros. There is no Math.random/default/derived PIN and
+no insecure fallback. Use HTTPS or localhost so Web Crypto is available. The
+POST contract now requires `{pin, expected_revision}` and returns a non-secret
+revision receipt: no stored PIN or hash can be retrieved.
+Plaintext is held only in an in-flight browser operation and its one-time display,
+never URLs, browser storage, analytics, console/audit output or server responses.
+The display clears on close, editor/participant change, logout and invalidation/
+expiry; stale responses cannot restore it. An atomic pending guard blocks repeat
+clicks, and reset/revoke require explicit confirmation. The receipt revision must
+match an active snapshot before disclosure; AKTIF alone is insufficient. Open
+views revalidate every five seconds and on focus/visibility return, hide during
+checks and clear on mismatch/failure. Verification is explicitly point-in-time;
+subsequent authorized writes can invalidate it, and login remains authoritative.
+Ordinary editor closure/save is blocked during a pending write; explicit logout
+still discards data immediately. A 30-second client timeout or abort is not proof
+of server cancellation; reload/reset recovery guidance is shown.
+
+Mutation audit action codes remain `credential.issued`, `credential.reset`,
+and `credential.revoked`, with only fixed outcome metadata.
+PIN reuse is rejected with 422 before any token deletion; audit/storage failures
+roll back hash/revocation changes and token deletion together. No audit row is
+updated or deleted. Existing login limits, token expiry and ADMIN_IT scopes remain.
+
+See [researcher instructions and reviewed contract gaps](../enrollment/pin-management-pr10.md).
