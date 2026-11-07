@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccessGrantController;
+use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\EnrollmentController;
@@ -23,6 +24,12 @@ Route::post('/auth/staff/login', [AuthController::class, 'staffLogin'])->middlew
 Route::post('/auth/patient/login', [AuthController::class, 'patientLogin'])->middleware('throttle:patient-login')->name('auth.patient.login');
 
 Route::middleware(['auth:sanctum', 'principal.active'])->group(function () {
+    Route::middleware('throttle:assessment')->group(function () {
+        Route::get('/patient/assessments/status', [AssessmentController::class, 'status']);
+        Route::post('/patient/assessments', [AssessmentController::class, 'store']);
+        Route::get('/patient/assessments', [AssessmentController::class, 'history']);
+        Route::get('/participants/{participant}/assessments', [AssessmentController::class, 'researcherHistory']);
+    });
     Route::get('/research/access', [EnrollmentController::class, 'access']);
     Route::post('/research/participants/search', [EnrollmentController::class, 'search']);
     Route::post('/research/participants', [EnrollmentController::class, 'store']);

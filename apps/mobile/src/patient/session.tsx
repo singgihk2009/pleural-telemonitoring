@@ -195,16 +195,16 @@ export function PatientProvider({ children }: PropsWithChildren) {
       if (issued && !committed) await revoke(issued.token);
     }
   }
-  async function api<T>(path: string): Promise<T> {
+  async function api<T>(path: string, body?: object): Promise<T> {
     const session = current.current;
     if (!session || Date.parse(session.expires) <= Date.now()) {
       await clear('Sesi berakhir. Silakan masuk kembali.');
       throw new ApiError(401, 'Sesi berakhir.');
     }
     try {
-      return await request<T>(path, session.token);
+      return await request<T>(path, session.token, body);
     } catch (error) {
-      if (error instanceof ApiError && [401, 403].includes(error.status))
+      if (error instanceof ApiError && [401, 403].includes(error.status) && current.current?.token === session.token)
         await clear('Sesi berakhir atau akses dicabut. Silakan masuk kembali.');
       throw error;
     }

@@ -1,3 +1,5 @@
+import { DailyAssessment, AssessmentHistory } from './DailyAssessment';
+export { VasControl } from './VasControl';
 import { useEffect, useState, type PropsWithChildren } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Redirect, router } from 'expo-router';
@@ -169,7 +171,7 @@ function Home() {
         </Heading>
         <Copy>
           {closed
-            ? 'Isian harian ditutup. Hanya formulir akhir yang dapat dibuka.'
+            ? 'Isian harian ditutup. Riwayat tersimpan dan formulir akhir dapat dibuka.'
             : 'Hari 0 adalah tanggal pulang. Pergantian hari mengikuti WIB.'}
         </Copy>
       </Card>
@@ -181,11 +183,10 @@ function Home() {
             onPress={() => router.push('/daily')}
           />
           <Copy style={styles.muted}>
-            Pratinjau formulir saja. Pengiriman isian belum tersedia.
+            Formulir memuat instrumen dan status pengisian yang disetujui dari server.
           </Copy>
           <Notice>
-            Status pengisian hari ini belum tersedia. Belum ada isian yang dikirim dari aplikasi
-            ini.
+            Buka isian harian untuk memeriksa status server. Riwayat menampilkan isian yang sudah tersimpan.
           </Notice>
           <View style={local.grid}>
             {(
@@ -215,6 +216,7 @@ function Home() {
           />
         </>
       )}
+      {closed && <Button title="Lihat riwayat tersimpan" secondary onPress={() => router.push('/history')} />}
       <Button
         title="Buka formulir akhir"
         secondary
@@ -231,135 +233,11 @@ function Home() {
     </Frame>
   );
 }
-export function VasControl({
-  value,
-  onChange,
-}: {
-  value: number | null;
-  onChange(value: number): void;
-}) {
-  const [width, setWidth] = useState(0);
-  const choose = (x: number) => {
-    if (width > 24)
-      onChange(Math.max(0, Math.min(100, Math.round(((x - 12) / (width - 24)) * 100))));
-  };
-  return (
-    <Card>
-      <Copy style={styles.sectionTitle}>Seberapa sesak Anda hari ini?</Copy>
-      <Copy>Sentuh dan geser garis. 0 = tidak sesak, 100 = sangat sesak.</Copy>
-      <View style={local.vasValue}>
-        <Copy accessibilityLiveRegion="polite" style={local.vasNumber}>
-          {value === null ? '— —' : value} mm
-        </Copy>
-      </View>
-      <View
-        testID="vas-touch-area"
-        accessible
-        accessibilityRole="adjustable"
-        accessibilityLabel="Tingkat sesak"
-        accessibilityValue={
-          value === null
-            ? { text: 'Belum dipilih' }
-            : { min: 0, max: 100, now: value, text: `${value} milimeter` }
-        }
-        accessibilityActions={[
-          { name: 'increment', label: 'Tambah satu milimeter' },
-          { name: 'decrement', label: 'Kurangi satu milimeter' },
-        ]}
-        onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === 'increment')
-            onChange(Math.min(100, (value ?? -1) + 1));
-          if (event.nativeEvent.actionName === 'decrement') onChange(Math.max(0, (value ?? 1) - 1));
-        }}
-        style={{ minHeight: 56, justifyContent: 'center' }}
-        onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-        onStartShouldSetResponderCapture={() => true}
-        onStartShouldSetResponder={() => true}
-        onResponderTerminationRequest={() => false}
-        onResponderGrant={(event) => choose(event.nativeEvent.locationX)}
-        onResponderMove={(event) => choose(event.nativeEvent.locationX)}
-      >
-        <View
-          pointerEvents="none"
-          importantForAccessibility="no-hide-descendants"
-          style={{
-            marginHorizontal: 12,
-            height: 4,
-            borderRadius: 2,
-            backgroundColor: colors.muted,
-          }}
-        >
-          {value !== null && (
-            <>
-              <View
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: `${value}%`,
-                  borderRadius: 2,
-                  backgroundColor: colors.blue,
-                }}
-              />
-              <View
-                style={{
-                  position: 'absolute',
-                  left: `${value}%`,
-                  top: -8,
-                  transform: [{ translateX: -10 }],
-                  width: 20,
-                  height: 20,
-                  borderRadius: 10,
-                  backgroundColor: colors.blue,
-                  borderWidth: 2,
-                  borderColor: 'white',
-                }}
-              />
-            </>
-          )}
-        </View>
-      </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Copy>0</Copy>
-        <Copy>50</Copy>
-        <Copy>100</Copy>
-      </View>
-      <Copy style={styles.muted}>Tanpa nilai awal. Pilih nilai sendiri sebelum melanjutkan.</Copy>
-    </Card>
-  );
-}
 export function DailyScreen() {
   return (
     <Protected>
-      <DailyForm />
+      <DailyAssessment />
     </Protected>
-  );
-}
-function DailyForm() {
-  const [value, setValue] = useState<number | null>(null);
-  const [symptoms, setSymptoms] = useState(false);
-  const day = useDay();
-  return (
-    <Frame
-      title={symptoms ? 'Gejala hari ini' : 'Isi harian'}
-      step={symptoms ? 'F3 · 2 DARI 2' : 'F3 · 1 DARI 2'}
-      onBack={symptoms ? () => setSymptoms(false) : undefined}
-    >
-      {day === null || day < 1 || day > 30 ? (
-        <Notice>Isian harian hanya tersedia pada hari 1–30 penelitian.</Notice>
-      ) : symptoms ? (
-        <SymptomForm />
-      ) : (
-        <>
-          <VasControl value={value} onChange={setValue} />
-          <Button title="Lanjut" disabled={value === null} onPress={() => setSymptoms(true)} />
-          <Copy style={styles.muted}>
-            Nilai ini hanya sementara di layar, tidak disimpan atau dikirim.
-          </Copy>
-        </>
-      )}
-    </Frame>
   );
 }
 const illustrativeSymptoms = [
@@ -463,39 +341,7 @@ export function ContactScreen() {
   );
 }
 export function HistoryScreen() {
-  return (
-    <Protected>
-      <Frame title="Riwayat 30 hari" step="F9 · RIWAYAT">
-        <Card>
-          <Heading>Grafik VAS (mm)</Heading>
-          <View
-            accessibilityLabel="Grafik belum tersedia, tidak ada data ditampilkan"
-            style={local.emptyChart}
-          >
-            <Copy style={styles.muted}>Belum ada data yang dimuat</Copy>
-          </View>
-          <View style={local.options}>
-            <Copy>Hari 1</Copy>
-            <Copy>Hari 30</Copy>
-          </View>
-          <Copy style={styles.muted}>
-            Grafik, garis baseline dan tanda pengisian belum dihubungkan ke riwayat terverifikasi.
-          </Copy>
-        </Card>
-        <Card>
-          <Copy style={styles.sectionTitle}>Kalender pengisian</Copy>
-          <View style={local.calendar}>
-            {Array.from({ length: 30 }, (_, i) => (
-              <View key={i} style={local.day}>
-                <Copy accessibilityLabel={`Hari ${i + 1}, status belum tersedia`}>{i + 1}</Copy>
-              </View>
-            ))}
-          </View>
-          <Copy>Tidak ada status kepatuhan yang dihitung.</Copy>
-        </Card>
-      </Frame>
-    </Protected>
-  );
+  return <Protected final><AssessmentHistory /></Protected>;
 }
 const education = [
   'Tanda bahaya',
@@ -602,8 +448,6 @@ const local = StyleSheet.create({
     minHeight: 150,
   },
   tileNumber: { color: colors.blue, fontSize: 22, fontWeight: '700', lineHeight: 30 },
-  vasValue: { borderRadius: 16, padding: 24, backgroundColor: '#EDF4FC', alignItems: 'center' },
-  vasNumber: { fontSize: 36, lineHeight: 48, fontWeight: '700', color: colors.navy },
   symptom: { borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 16 },
   options: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
   emptyChart: {

@@ -434,3 +434,12 @@ Encryption requires the Laravel model write path and managed application key;
 the database cannot distinguish encrypted ciphertext from raw strings. Never
 use raw SQL to write identity fields. Role memberships, approvals, timestamps
 and audit codes record provenance, not proof of actual human authorization.
+
+## PR-11 additive daily assessment amendment
+
+See [daily assessment v1.4](daily-assessment-v1.4.md) for nullable immutable
+`entri_harian.assessment_setting_id` (restrictive FK), hidden
+`submission_fingerprint` CHAR(64), paired-provenance CHECK, existing-row behavior
+and canonical retry semantics. `pengaturan` daily_assessment versions and exact
+symptom catalog references are consumed only after approval/effectivity/shape
+validation. No clinical definitions, scores or schedules are seeded.

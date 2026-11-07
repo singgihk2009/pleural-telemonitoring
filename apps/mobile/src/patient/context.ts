@@ -14,7 +14,7 @@ export type Context = State & {
   logout(): Promise<void>;
   retry(): Promise<void>;
   acknowledge(): void;
-  api<T>(path: string): Promise<T>;
+  api<T>(path: string, body?: object): Promise<T>;
 };
 export const PatientContext = createContext<Context | null>(null);
 export function usePatient() {

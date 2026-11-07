@@ -52,3 +52,7 @@ changing these research relationships.
 
 The [v1.2 scope amendment](grant-scopes-v1.2.md) adds explicit scope bindings to
 identified-access grants; a parent grant alone grants no patient-data access.
+
+PR-11 adds the optional provenance relationship `pengaturan o|--o{ entri_harian`
+through `assessment_setting_id`; historical rows remain unlinked. See the
+[daily-assessment ERD/amendment](daily-assessment-v1.4.md).

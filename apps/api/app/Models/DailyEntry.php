@@ -18,6 +18,13 @@ class DailyEntry extends Model
 
     protected $dateFormat = 'Y-m-d H:i:s.u';
 
+    protected $hidden = ['submission_fingerprint'];
+
+    public function assessmentSetting(): BelongsTo
+    {
+        return $this->belongsTo(ResearchSetting::class, 'assessment_setting_id');
+    }
+
     protected $fillable = ['responden_id', 'kelompok', 'tanggal_pulang', 'tanggal_wib', 'vas_mm', 'tipe', 'diisi_oleh', 'dibuat_di_perangkat_pada', 'diterima_server_pada'];
 
     protected function casts(): array
