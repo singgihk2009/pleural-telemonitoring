@@ -72,6 +72,75 @@ class DailyAssessmentTest extends TestCase
             'answers' => [['code' => 'SYNTHETIC_ITEM', 'option_id' => $setting->nilai_json['questions'][0]['options'][0]['id']]]];
     }
 
+    public function test_research_history_filters_are_inclusive_scoped_and_use_the_linked_version_labels(): void
+    {
+        $setting = SyntheticDailyInstrument::create();
+        $patient = $this->patient();
+        $body = $this->body($setting);
+        $this->api($this->token($patient), 'POST', body: $body)->assertCreated();
+        $legacy = DailyEntry::factory()->repeat()->create(['responden_id' => $patient->responden_id, 'tanggal_wib' => '2026-11-07']);
+        $legacy->symptoms()->create(['symptom_option_id' => $body['answers'][0]['option_id'], 'kode_gejala' => 'SYNTHETIC_ITEM', 'jawaban' => 'SYNTHETIC_A']);
+        DailyEntry::factory()->create(['responden_id' => Participant::factory()->create(['tanggal_pulang' => '2026-11-05'])->id]);
+        // Today's setting must not change the wording of yesterday's linked immutable version.
+        $newDefinition = $setting->nilai_json;
+        $newDefinition['questions'][0]['label'] = 'SYNTHETIC DIFFERENT NEW LABEL';
+        SyntheticDailyInstrument::create(['berlaku_mulai' => now(), 'nilai_json' => $newDefinition]);
+        $token = $this->token($setting->approver);
+        $path = '/participants/'.$patient->responden_id.'/assessments';
+        $response = $this->api($token, 'GET', $path.'?from=2026-11-07&to=2026-11-07&type=HARIAN')
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $body['submission_id'])
+            ->assertJsonPath('meta.filters', ['from' => '2026-11-07', 'to' => '2026-11-07', 'type' => 'HARIAN'])
+            ->assertJsonPath('data.0.answers.0.question_label', $setting->nilai_json['questions'][0]['label'])
+            ->assertJsonPath('data.0.answers.0.answer_label', $setting->nilai_json['questions'][0]['options'][0]['label']);
+        $response->assertDontSee('pin_hash')->assertDontSee('submission_fingerprint')->assertDontSee('kontak');
+        $this->api($token, 'GET', $path.'?type=ULANG')->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.version', null)
+            ->assertJsonPath('data.0.answers.0.question_label', null)->assertJsonPath('data.0.answers.0.answer_label', null);
+        $this->api($token, 'GET', $path.'?from=2026-11-08')->assertOk()->assertJsonPath('meta.total', 0);
+        $this->api($token, 'GET', $path.'?to=2026-11-06')->assertOk()->assertJsonPath('meta.total', 0);
+        $this->api($token, 'GET', $path)->assertOk()->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('meta.filters', ['from' => null, 'to' => null, 'type' => null]);
+        $this->assertSame(1, AuditLog::where('aksi', 'assessment.submitted')->count());
+        $this->assertGreaterThanOrEqual(5, AuditLog::where('aksi', 'privileged.access')->count());
+        $this->assertDatabaseCount('klasifikasi', 0);
+        $this->assertDatabaseCount('peringatan', 0);
+        $this->assertDatabaseCount('notification_deliveries', 0);
+    }
+
+    public function test_filters_validate_after_authorization_and_do_not_allow_scope_or_role_bypasses(): void
+    {
+        $setting = SyntheticDailyInstrument::create();
+        $patient = $this->patient();
+        $path = '/participants/'.$patient->responden_id.'/assessments';
+        $token = $this->token($setting->approver);
+        foreach (['?from=tomorrow', '?to=2026-02-30', '?from=2026-11-08&to=2026-11-07', '?type=INVENTED'] as $query) {
+            $this->api($token, 'GET', $path.$query)->assertUnprocessable();
+        }
+        foreach (['ADMIN_IT', 'PERAWAT_PEMANTAU', 'PENILAI_HASIL'] as $role) {
+            $staff = StaffUser::factory()->create();
+            $staff->roles()->attach(ResearchRole::firstOrCreate(['kode' => $role]));
+            $this->api($this->token($staff), 'GET', $path.'?from=INVALID')->assertForbidden();
+        }
+        $this->api($this->token($patient), 'GET', $path.'?from=INVALID')->assertForbidden();
+        $this->api(null, 'GET', $path.'?from=INVALID')->assertUnauthorized();
+        $setting->approver->roles()->attach(ResearchRole::firstOrCreate(['kode' => 'PENILAI_HASIL']));
+        $this->api($this->token($setting->approver), 'GET', $path.'?type=HARIAN')->assertForbidden();
+        $this->assertDatabaseCount('entri_harian', 0);
+    }
+
+    public function test_filtered_history_keeps_bounded_pagination_and_no_patient_projection_change(): void
+    {
+        $setting = SyntheticDailyInstrument::create();
+        $patient = $this->patient();
+        DailyEntry::factory()->repeat()->count(26)->create(['responden_id' => $patient->responden_id]);
+        $path = '/participants/'.$patient->responden_id.'/assessments?type=ULANG';
+        $token = $this->token($setting->approver);
+        $this->api($token, 'GET', $path)->assertOk()->assertJsonCount(25, 'data')->assertJsonPath('meta.total', 26)->assertJsonPath('meta.last_page', 2);
+        $this->api($token, 'GET', $path.'&page=2')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.filters', ['from' => null, 'to' => null, 'type' => 'ULANG']);
+        $this->api($this->token($patient), 'GET')->assertOk()->assertJsonMissingPath('meta.filters');
+        $this->assertDatabaseCount('entri_harian', 26);
+    }
+
     public function test_unapproved_catalog_is_unavailable_and_no_write_is_possible(): void
     {
         $token = $this->token($this->patient());

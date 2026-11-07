@@ -1076,6 +1076,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AssessmentHistory'
+        '422':
+          description: Invalid date range or record type. Authorization is checked first.
         '404':
           description: Participant not found.
         '401': *id002
@@ -1088,6 +1090,24 @@ paths:
         schema:
           type: string
           format: uuid
+      - in: query
+        name: from
+        description: Inclusive earliest stored observation date in WIB; no late-submission authorization.
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: to
+        description: Inclusive latest stored observation date in WIB, on or after from when both provided.
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: type
+        description: Stored record type only; does not enable repeat submissions.
+        schema:
+          type: string
+          enum: [HARIAN, ULANG]
       - in: query
         name: page
         schema:
@@ -1930,6 +1950,12 @@ components:
           type: integer
         value:
           type: string
+        question_label:
+          type: [string, 'null']
+          description: Staff history only; from the entry-linked immutable instrument, null for legacy/missing definition.
+        answer_label:
+          type: [string, 'null']
+          description: Staff history only; exact linked option label, never current-version or invented wording.
     DailyAssessment:
       type: object
       additionalProperties: false
@@ -2171,6 +2197,21 @@ components:
             total:
               type: integer
               minimum: 0
+            filters:
+              type: object
+              additionalProperties: false
+              description: Staff history only. Normalized applied filters; clients must verify this echo before claiming a filtered result.
+              required: [from, to, type]
+              properties:
+                from:
+                  type: [string, 'null']
+                  format: date
+                to:
+                  type: [string, 'null']
+                  format: date
+                type:
+                  type: [string, 'null']
+                  enum: [HARIAN, ULANG, null]
   securitySchemes:
     bearerAuth:
       type: http
