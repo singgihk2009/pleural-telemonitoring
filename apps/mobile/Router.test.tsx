@@ -233,35 +233,20 @@ test('active session expiration returns to login and clears secure storage', asy
   expect(SecureStore.deleteItemAsync).toHaveBeenCalled();
 });
 
-test('day-12 navigation requires explicit VAS and never submits symptoms', async () => {
-  const discharge = new Date(Date.parse(wibToday + 'T00:00:00Z') - 12 * 86400000)
-    .toISOString()
-    .slice(0, 10);
+test('day-12 navigation refuses assessment without an approved server instrument', async () => {
+  const discharge = new Date(Date.parse(wibToday + 'T00:00:00Z') - 12 * 86400000).toISOString().slice(0, 10);
   loginReplies(discharge);
+  mockFetch.mockResolvedValueOnce(reply({ data: { available: false, can_submit: false, date_wib: wibToday, study_day: 12, questionnaire: null, submitted: null } }));
   await renderRouter(routes, { initialUrl: '/' });
-  await screen.findByText('Selamat datang');
-  await enter();
-  await screen.findByText('Pernyataan awal');
-  await fireEvent.press(screen.getByRole('checkbox'));
-  await fireEvent.press(screen.getByRole('button', { name: 'Lanjut' }));
-  await screen.findByText('Hari 12 dari 30');
+  await screen.findByText('Selamat datang'); await enter();
+  await screen.findByText('Pernyataan awal'); await fireEvent.press(screen.getByRole('checkbox'));
+  await fireEvent.press(screen.getByRole('button', { name: 'Lanjut' })); await screen.findByText('Hari 12 dari 30');
   await fireEvent.press(screen.getByRole('button', { name: 'Isi tingkat sesak hari ini' }));
-  expect(await screen.findByText('— — mm')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Lanjut' })).toBeDisabled();
-  await fireEvent(screen.getByTestId('vas-touch-area'), 'layout', {
-    nativeEvent: { layout: { width: 240 } },
-  });
-  await fireEvent(screen.getByTestId('vas-touch-area'), 'responderGrant', {
-    nativeEvent: { locationX: 0 },
-  });
-  expect(screen.getByText('0 mm')).toBeTruthy();
-  await fireEvent.press(screen.getByRole('button', { name: 'Lanjut' }));
-  expect(await screen.findByText(/bukan daftar gejala final/)).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Kirim · belum tersedia' })).toBeDisabled();
-  expect(mockFetch).toHaveBeenCalledTimes(3);
-  await fireEvent.press(screen.getByRole('button', { name: 'Kembali' }));
-  expect(await screen.findByText('0 mm')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Lanjut' })).not.toBeDisabled();
+  await screen.findByText(/Assessment belum tersedia/);
+  expect(screen.queryByRole('adjustable')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Kirim isian' })).toBeNull();
+  expect(mockFetch).toHaveBeenCalledTimes(4);
+  expect(mockFetch.mock.calls[3][0]).toMatch(/patient\/assessments\/status$/);
 });
 
 test('public internet validation does not block a reachable local API; disconnection does', async () => {

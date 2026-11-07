@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from 'react'
 import { ApiError, errorMessage, request } from './api'
 import type { Enrollment, Group, Session, Status } from './api'
 import { Icon } from './icons'
+import { AssessmentHistory } from './AssessmentHistory'
 import { AndroidAccess } from './AndroidAccess'
 
 type Fields = {
@@ -463,6 +464,7 @@ export function EnrollmentForm({
                   )}
                 </div>
               </section>
+              {record && <AssessmentHistory key={record.id} participantId={record.id} session={session} onExpired={onExpired} />}
               {record && (
                 <AndroidAccess
                   participant={record}

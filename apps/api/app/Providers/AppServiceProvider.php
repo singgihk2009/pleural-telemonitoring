@@ -20,6 +20,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Relation::enforceMorphMap(['staff' => StaffUser::class, 'patient' => PatientCredential::class]);
         Gate::policy(Participant::class, ParticipantPolicy::class);
+        RateLimiter::for('assessment', fn (Request $request) => Limit::perMinute(30)->by('assessment-'.$request->user()->getMorphClass().'-'.$request->user()->getAuthIdentifier()));
         foreach (['staff' => 'email', 'patient' => 'code'] as $kind => $field) {
             RateLimiter::for($kind.'-login', function (Request $request) use ($kind, $field) {
                 $value = $request->input($field);

@@ -276,3 +276,25 @@ roll back hash/revocation changes and token deletion together. No audit row is
 updated or deleted. Existing login limits, token expiry and ADMIN_IT scopes remain.
 
 See [researcher instructions and reviewed contract gaps](../enrollment/pin-management-pr10.md).
+
+## PR-11 patient assessment ingestion
+
+Patient-only `/patient/assessments` derives identity from the existing Sanctum
+principal. Under participant then credential locks it rechecks current eligibility,
+revocation, token existence/ability/expiration before writes or retry recovery.
+PR-10 issuance/reset/revocation behavior is unchanged. Current approved instrument,
+strict catalog, integer VAS, explicit same-day schedule and DB immutable/unique/FK
+constraints guard atomic submissions. Stable UUID plus canonical fingerprint
+supports same-owner exact retries with no duplicate mutation audit. Unknown identity
+fields, foreign UUIDs and changed-body replays never reveal another participant.
+
+Staff history `/participants/{participant}/assessments` applies existing staff-only
+monitoring policy and query scope. Blinding, assignment validity, active researcher
+approval and explicit CLINICAL_READ grant restrictions remain enforced. It exposes
+safe observations/timestamps, not contact fields, hashes, retry fingerprints,
+classifications, alerts or arbitrary model relationships. Enrollment access itself
+remains researcher-only and unconditionally excludes assessors from contacts.
+No assessment update endpoint is provided. Assessment routes share a 30/minute
+principal throttle; response caching and payload/secret logging are prohibited.
+Audit codes for submission/privileged read use opaque IDs and fixed outcome codes.
+See [architecture and recovery guarantees](../assessment/README.md).

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Pleural Telemonitoring Development API
-  version: 0.4.0
+  version: 0.5.0
   description: TeleNapas infrastructure health, separate staff/patient bearer authentication, and participant-scoped
     research access. No clinical engine or active notification delivery. PR-04 adds researcher-only enrollment
     and baseline management with encrypted optional contact data and optimistic updates.
@@ -20,6 +20,9 @@ tags:
   description: Researcher-issued credentials and separately authorized IT access
 - name: Enrollment
   description: Researcher-only study enrollment, baseline and status management
+- name: Assessments
+  description: Approved-version patient daily submissions and policy-scoped immutable history; no classification
+    or alerts
 paths:
   /api/v1/health:
     get:
@@ -141,7 +144,7 @@ paths:
         accounts.
       tags:
       - Authentication
-      security:
+      security: &id001
       - bearerAuth: []
       responses:
         '200':
@@ -483,7 +486,8 @@ paths:
         combinations are always denied. One indexed snapshot read without an exclusive participant lock
         or successful-read audit insertion. Permission denials remain audited. No PIN, hash, token or
         issuer metadata is returned. The snapshot is not a promise against later authorized changes.
-      tags: [Access management]
+      tags:
+      - Access management
       security:
       - bearerAuth: []
       parameters:
@@ -495,22 +499,29 @@ paths:
           format: uuid
       responses:
         '200':
-          description: Non-cacheable status/revision snapshot. Null revision means no credential or a legacy row.
+          description: Non-cacheable status/revision snapshot. Null revision means no credential or a
+            legacy row.
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: false
-                required: [data]
+                required:
+                - data
                 properties:
                   data:
                     type: object
                     additionalProperties: false
-                    required: [status, revision]
+                    required:
+                    - status
+                    - revision
                     properties:
                       status:
                         type: string
-                        enum: [BELUM_DITERBITKAN, AKTIF, DICABUT]
+                        enum:
+                        - BELUM_DITERBITKAN
+                        - AKTIF
+                        - DICABUT
                       revision:
                         $ref: '#/components/schemas/CredentialRevision'
         '401':
@@ -524,11 +535,12 @@ paths:
       summary: Issue or reset a PIN with an expected credential revision
       description: Principal researcher only, never IT or assessor combinations. Six ASCII digits as a
         string are hashed; plaintext and hashes are never returned. The required expected_revision must
-        match the stored revision under the participant lock before any hash/token/audit mutation.
-        Stale writes return 409 without changes. Successful reset requires a different PIN and revokes
-        prior sessions. The receipt identifies the committed revision; compare it with a fresh active
-        snapshot before disclosure. A lost or aborted browser response is not server cancellation.
-      tags: [Access management]
+        match the stored revision under the participant lock before any hash/token/audit mutation. Stale
+        writes return 409 without changes. Successful reset requires a different PIN and revokes prior
+        sessions. The receipt identifies the committed revision; compare it with a fresh active snapshot
+        before disclosure. A lost or aborted browser response is not server cancellation.
+      tags:
+      - Access management
       security:
       - bearerAuth: []
       requestBody:
@@ -538,7 +550,9 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [pin, expected_revision]
+              required:
+              - pin
+              - expected_revision
               properties:
                 pin:
                   type: string
@@ -563,7 +577,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/CredentialMutationReceipt'
         '409':
-          description: Stale revision; no mutation committed. Reload status and explicitly confirm a new operation.
+          description: Stale revision; no mutation committed. Reload status and explicitly confirm a new
+            operation.
           content:
             application/json:
               schema:
@@ -580,9 +595,10 @@ paths:
       operationId: revokePatientCredential
       summary: Revoke Android access with an expected credential revision
       description: Same researcher/participant restrictions as issuance. The revision is checked under
-        the participant lock; stale revocations return 409 before token deletion or audit mutation.
-        A successful revocation invalidates sessions and preserves participant/research records.
-      tags: [Access management]
+        the participant lock; stale revocations return 409 before token deletion or audit mutation. A
+        successful revocation invalidates sessions and preserves participant/research records.
+      tags:
+      - Access management
       security:
       - bearerAuth: []
       requestBody:
@@ -592,7 +608,8 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [expected_revision]
+              required:
+              - expected_revision
               properties:
                 expected_revision:
                   $ref: '#/components/schemas/CredentialRevision'
@@ -763,8 +780,8 @@ paths:
     get:
       operationId: getEnrollmentAccess
       summary: Check researcher enrollment access
-      description: Active PENELITI_UTAMA only; ADMIN_IT and all PENILAI_HASIL combinations remain denied, regardless of blinding.
-        No patient data returned.
+      description: Active PENELITI_UTAMA only; ADMIN_IT and all PENILAI_HASIL combinations remain denied,
+        regardless of blinding. No patient data returned.
       tags:
       - Enrollment
       security:
@@ -949,10 +966,139 @@ paths:
         schema:
           type: string
           format: uuid
+  /api/v1/patient/assessments/status:
+    get:
+      operationId: patientAssessmentStatus
+      summary: Get own daily assessment eligibility and approved questionnaire
+      description: Patient principal only. Identity is derived from Sanctum. Returns unavailable with
+        null questionnaire if approved effective definition is missing, malformed, ambiguous or unsupported.
+        Does not seed instruments. All assessment routes share 30 requests/minute per principal. Responses
+        are non-cacheable.
+      tags:
+      - Assessments
+      security: *id001
+      responses:
+        '200':
+          description: Current server WIB snapshot and immutable receipt if already submitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentStatus'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyAttempts'
+  /api/v1/patient/assessments:
+    get:
+      operationId: patientAssessmentHistory
+      summary: Read own immutable assessment history
+      description: Patient principal only, including legacy records with null version. No patient ID accepted.
+        Latest date first, 25 per page, no clinical computation.
+      tags:
+      - Assessments
+      security: *id001
+      responses:
+        '200':
+          description: Own history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentHistory'
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+          minimum: 1
+    post:
+      operationId: submitPatientAssessment
+      summary: Submit an approved daily assessment
+      description: Patient principal only. Server derives identity, group, day zero and receipt time.
+        First submission must match current version, approved same-day WIB schedule and exact catalog
+        answers. Participant then credential locks serialize against PR-10 reset/revocation; token is
+        checked again inside transaction. Existing UUID plus identical canonical body returns original
+        receipt before current-version/day checks (but after current authorization); changed body, foreign
+        UUID, duplicate day or stale version returns 409. No classification, score, alert or messaging
+        side effects. No plaintext credentials returned. Unknown identity fields are rejected.
+      tags:
+      - Assessments
+      security: *id001
+      responses:
+        '201':
+          description: Committed immutable assessment, replayed=false.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentReceipt'
+        '200':
+          description: Exact retry recovered original receipt, replayed=true; no extra submission audit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentReceipt'
+        '409':
+          description: Unavailable instrument, changed version/day, duplicate day or reused UUID with
+            different body/owner. Reload status; do not replace an uncertain retry UUID automatically.
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '503':
+          description: Storage failed and transaction rolled back. Retry with the same UUID/body; no SQL
+            or clinical values returned.
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssessmentSubmission'
+  /api/v1/participants/{participant}/assessments:
+    get:
+      operationId: staffAssessmentHistory
+      summary: Read participant assessment observations
+      description: Existing staff-only monitoring policy and query scope. Blinded assessor combinations
+        are denied. ADMIN_IT requires independent CLINICAL_READ; CONTACT/TECHNICAL are insufficient. Nurses
+        need current participant assignment. Audits privileged access. No write endpoint or contact/clinical-result
+        serialization.
+      tags:
+      - Assessments
+      security: *id001
+      responses:
+        '200':
+          description: Authorized read-only history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentHistory'
+        '404':
+          description: Participant not found.
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      parameters:
+      - in: path
+        name: participant
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: page
+        schema:
+          type: integer
+          minimum: 1
 components:
   schemas:
     CredentialRevision:
-      type: [string, 'null']
+      type:
+      - string
+      - 'null'
       format: uuid
       description: Non-secret random credential version, independent of PIN/hash. Send the exact latest
         GET revision as expected_revision, including explicit null for no credential or a legacy row.
@@ -960,14 +1106,17 @@ components:
     CredentialMutationReceipt:
       type: object
       additionalProperties: false
-      required: [message, data]
+      required:
+      - message
+      - data
       properties:
         message:
           type: string
         data:
           type: object
           additionalProperties: false
-          required: [revision]
+          required:
+          - revision
           properties:
             revision:
               type: string
@@ -1754,6 +1903,274 @@ components:
             can_manage_enrollment:
               type: boolean
               const: true
+    AssessmentAnswerInput:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - option_id
+      properties:
+        code:
+          type: string
+          maxLength: 48
+        option_id:
+          type: integer
+          minimum: 1
+    AssessmentAnswer:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - option_id
+      - value
+      properties:
+        code:
+          type: string
+        option_id:
+          type: integer
+        value:
+          type: string
+    DailyAssessment:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - date_wib
+      - study_day
+      - vas_mm
+      - type
+      - filled_by
+      - received_at
+      - device_created_at
+      - version
+      - answers
+      properties:
+        id:
+          type: string
+          format: uuid
+        date_wib:
+          type: string
+          format: date
+        study_day:
+          type: integer
+          minimum: 1
+          maximum: 30
+        vas_mm:
+          type: integer
+          minimum: 0
+          maximum: 100
+        type:
+          type: string
+          enum:
+          - HARIAN
+          - ULANG
+        filled_by:
+          type: string
+          enum:
+          - PASIEN
+          - KELUARGA
+        received_at:
+          type: string
+          format: date-time
+        device_created_at:
+          type: string
+          format: date-time
+        version:
+          type:
+          - string
+          - 'null'
+        answers:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssessmentAnswer'
+    DailyQuestion:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - label
+      - required
+      - options
+      properties:
+        code:
+          type: string
+          pattern: ^[A-Z0-9_]{1,48}$
+        label:
+          type: string
+          maxLength: 300
+        required:
+          type: boolean
+        options:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - id
+            - label
+            properties:
+              id:
+                type: integer
+                minimum: 1
+              label:
+                type: string
+                maxLength: 150
+          minItems: 1
+          maxItems: 20
+    DailyInstrument:
+      type: object
+      additionalProperties: false
+      required:
+      - version
+      - schedule
+      - questions
+      properties:
+        version:
+          type: string
+          maxLength: 40
+        schedule:
+          type: object
+          additionalProperties: false
+          required:
+          - timezone
+          - first_day
+          - last_day
+          - late_policy
+          properties:
+            timezone:
+              type: string
+              enum:
+              - Asia/Jakarta
+            first_day:
+              type: integer
+              minimum: 1
+              maximum: 30
+            last_day:
+              type: integer
+              minimum: 1
+              maximum: 30
+            late_policy:
+              type: string
+              enum:
+              - same_day_only
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailyQuestion'
+          minItems: 1
+          maxItems: 50
+    AssessmentStatus:
+      type: object
+      additionalProperties: false
+      required:
+      - available
+      - can_submit
+      - submission_id
+      - date_wib
+      - study_day
+      - questionnaire
+      - submitted
+      properties:
+        available:
+          type: boolean
+        can_submit:
+          type: boolean
+        submission_id:
+          type: string
+          format: uuid
+          description: Non-secret random retry identity for this screen; not a reservation or authorization.
+        date_wib:
+          type: string
+          format: date
+        study_day:
+          type: integer
+        questionnaire:
+          oneOf:
+          - $ref: '#/components/schemas/DailyInstrument'
+          - type: 'null'
+        submitted:
+          oneOf:
+          - $ref: '#/components/schemas/DailyAssessment'
+          - type: 'null'
+    AssessmentSubmission:
+      type: object
+      additionalProperties: false
+      required:
+      - submission_id
+      - version
+      - date_wib
+      - vas_mm
+      - filled_by
+      - device_created_at
+      - answers
+      properties:
+        submission_id:
+          type: string
+          format: uuid
+        version:
+          type: string
+          maxLength: 40
+        date_wib:
+          type: string
+          format: date
+        vas_mm:
+          type: integer
+          minimum: 0
+          maximum: 100
+        filled_by:
+          type: string
+          enum:
+          - PASIEN
+          - KELUARGA
+        device_created_at:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$
+          description: Untrusted device time, UTC with millisecond precision; never determines study day.
+        answers:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssessmentAnswerInput'
+          maxItems: 50
+    AssessmentReceipt:
+      type: object
+      additionalProperties: false
+      required:
+      - data
+      - replayed
+      properties:
+        data:
+          $ref: '#/components/schemas/DailyAssessment'
+        replayed:
+          type: boolean
+    AssessmentHistory:
+      type: object
+      additionalProperties: false
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailyAssessment'
+        meta:
+          type: object
+          additionalProperties: false
+          required:
+          - current_page
+          - last_page
+          - total
+          properties:
+            current_page:
+              type: integer
+              minimum: 1
+            last_page:
+              type: integer
+              minimum: 1
+            total:
+              type: integer
+              minimum: 0
   securitySchemes:
     bearerAuth:
       type: http

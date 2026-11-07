@@ -26,6 +26,8 @@ class MigrationLifecycleTest extends TestCase
         $this->assertFalse(Schema::hasTable('audit_log'));
         $this->artisan('migrate', ['--force' => true])->assertExitCode(0);
         $this->assertTrue(Schema::hasTable('entri_harian'));
+        $this->assertTrue(Schema::hasColumn('entri_harian', 'assessment_setting_id'));
+        $this->assertTrue(Schema::hasColumn('entri_harian', 'submission_fingerprint'));
         $this->assertSame(0, DB::table('responden')->count());
     }
 }

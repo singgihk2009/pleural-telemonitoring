@@ -4,7 +4,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { AppState, type AppStateStatus } from 'react-native';
 import { PatientProvider } from './src/patient/session';
 import { usePatient, type Context } from './src/patient/context';
-import { request } from './src/patient/api';
+import { request, ApiError } from './src/patient/api';
 import { vault } from './src/patient/storage';
 
 jest.mock('./src/patient/api', () => ({
@@ -122,4 +122,33 @@ test.each(['login', 'identity', 'profile', 'storage'])('superseded %s revokes on
   expect(vault.clear).toHaveBeenCalledTimes(stage === 'storage' ? 1 : 0);
   expect(vault.save).toHaveBeenLastCalledWith(newer);
   if (stage === 'storage') expect(jest.mocked(vault.clear).mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(vault.save).mock.invocationCallOrder[1]);
+});
+
+
+test('an abandoned assessment rejection cannot clear a newer patient session', async () => {
+  let reject!: (reason: Error) => void;
+  const held = new Promise((_resolve, fail) => { reject = fail; });
+  let logins = 0;
+  const newer = { ...session, token: 'SYNTHETIC-NEW-PATIENT' };
+  jest.mocked(request).mockImplementation(async path => {
+    if (path === '/auth/patient/login') {
+      const value = ++logins === 1 ? session : newer;
+      return { access_token: value.token, expires_at: value.expires };
+    }
+    if (path === '/auth/me') return { data: { id: 'SYNTHETIC-ID', kind: 'patient' } };
+    if (path.startsWith('/participants/')) return { data: { id: 'SYNTHETIC-ID', status: 'AKTIF', tanggal_pulang: '2026-11-01' } };
+    if (path === '/patient/assessments') return held;
+    return {};
+  });
+  await mount();
+  await act(() => patient.login('SYNTHETIC', '012345'));
+  const body = { submission_id: 'SYNTHETIC-REQUEST' };
+  const pending = patient.api('/patient/assessments', body).catch(error => error);
+  expect(request).toHaveBeenCalledWith('/patient/assessments', session.token, body);
+  await act(() => patient.logout());
+  await act(() => patient.login('OTHER-SYNTHETIC', '654321'));
+  const clearCount = jest.mocked(vault.clear).mock.calls.length;
+  await act(async () => { reject(new ApiError(401, 'Old session revoked')); await pending; });
+  expect(patient.session?.token).toBe(newer.token);
+  expect(vault.clear).toHaveBeenCalledTimes(clearCount);
 });

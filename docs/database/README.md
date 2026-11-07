@@ -139,3 +139,6 @@ schema. CI runs it separately. Do not enable the flag against a reused schema.
 Factories use `SYN-` study codes, `SYNTHETIC` labels, `example.invalid` staff mail
 and deliberately non-dialable contact strings. Catalogs/instruments are explicitly
 test-only, with no clinical meaning. There is no automatic factory seeder.
+
+PR-11 adds [daily assessment provenance v1.4](daily-assessment-v1.4.md), preserving
+legacy immutable entries and requiring an approved instrument before ingestion.
