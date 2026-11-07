@@ -24,6 +24,7 @@ clinical engine, notification, release APK/cloud build, production deployment or
 | Grant-scope upgrade | PASS — 19 assertions |
 | PR-11 upgrade with existing immutable records | PASS — 9 assertions; legacy report/audit unchanged, new fields NULL, immutable deletion triggers intact |
 | Compose syntax / HTTP / CORS | PASS — isolated API /up and health200, dashboard200; approved origin matches ACAO and unapproved origin does not |
+| Draft PR creation | BLOCKED — both GraphQL and REST POST returned Forbidden; feature branch pushed and [PR description prepared](PR-DRAFT.md) |
 | Hosted GitHub Actions | NOT VERIFIED — GitHub API returns Forbidden in this execution environment |
 | Actual Android Expo Go/emulator | PASS — synthetic login, unavailable gate, VAS/questions/confirmation, committed-response hold across background/foreground, dropped-response retry and own history; screenshots linked below |
 | Actual researcher browser | PASS — login, empty then submitted read-only history against the same isolated API; no editing or browser storage |

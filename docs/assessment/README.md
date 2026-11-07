@@ -117,3 +117,6 @@ The enrollment editor itself retains its stricter researcher/contact restriction
 
 See [UAT](UAT.md), [validation](validation-pr11.md) and
 [database amendment](../database/daily-assessment-v1.4.md).
+
+The [prepared draft PR description](PR-DRAFT.md) records the GitHub API creation
+blocker and links the published review branch. No merge/deployment is performed.
