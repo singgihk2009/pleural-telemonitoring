@@ -183,6 +183,7 @@ test.each((['REJECTED','RECONCILIATION_REQUIRED'] as const).flatMap(state => [0,
   await waitFor(() => expect(JSON.parse(disk.get(key)!).reason).toBe(status===401 || status===403 ? 'AUTH_REQUIRED' : 'RECONCILIATION_READ_FAILED'));
   expect(JSON.parse(disk.get(key)!).state).toBe(state); expect(JSON.parse(disk.get(key)!).body).toEqual(item.body);
   if (status===401 || status===403) expect(logout).toHaveBeenCalledTimes(1);
+  else expect(screen.getByText(/Ini hanya waktu pemeriksaan manual/)).toBeTruthy();
   await act(() => listeners.forEach(listener => listener('background')));
   await act(() => listeners.forEach(listener => listener('active')));
   await restored.unmount(); await render(view());

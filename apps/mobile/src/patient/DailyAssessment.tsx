@@ -152,7 +152,7 @@ function DailyForm() {
         {durable?.record && !['DRAFT','SYNCED'].includes(durable.record.state) && <Card>
           <Copy>{stateText[durable.record.state]}. {reasonText[durable.record.reason ?? ''] ?? ''}</Copy>
           <Copy>Permintaan lama tidak diubah. Isian terlambat/versi berubah perlu rekonsiliasi, bukan perubahan tanggal otomatis.</Copy>
-          {durable.record.nextAttemptAt > 0 && <Copy>Percobaan berikutnya paling cepat {new Date(durable.record.nextAttemptAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB. Setelah lima percobaan otomatis, periksa kembali secara manual.</Copy>}
+          {durable.record.nextAttemptAt > 0 && <Copy>Percobaan berikutnya paling cepat {new Date(durable.record.nextAttemptAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB. {['REJECTED','RECONCILIATION_REQUIRED'].includes(durable.record.state) ? 'Ini hanya waktu pemeriksaan manual. Tidak ada pengiriman otomatis dari karantina.' : 'Setelah lima percobaan otomatis, periksa kembali secara manual.'}</Copy>}
           <Button title="Periksa server / sinkronkan" secondary disabled={patient.offline || durable.syncing || durable.writing} onPress={() => { void durable.synchronize(true); }} />
           <Button title="Buang isian lokal…" secondary disabled={durable.syncing || durable.writing} onPress={discard} />
         </Card>}
