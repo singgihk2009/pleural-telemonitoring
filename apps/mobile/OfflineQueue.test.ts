@@ -157,7 +157,8 @@ test.each(quarantineFailures)('$state preserves quarantine after $status at $sta
   const restarted = new Queue(queue.namespace, disk.io); const recovered = server(item.body);
   await restarted.synchronize(recovered.api, owner, () => true);
   expect(recovered.calls).toHaveLength(0); // Not even an automatic reconciliation read.
-  expect((await restarted.synchronize(recovered.api, owner, () => true, true))?.state).toBe(state);
+  const checked = await restarted.synchronize(recovered.api, owner, () => true, true);
+  expect(checked?.state).toBe(state); expect(checked?.reason).toBe('RECONCILIATION_NO_RECEIPT');
   expect(recovered.posts()).toHaveLength(0); expect((await restarted.read())?.body).toEqual(item.body);
   const exact = server(item.body, path => path.includes('?submission_id=') ? { data: [receipt(item.body)], meta: { total: 1 } } : undefined);
   expect((await restarted.synchronize(exact.api, owner, () => true, true))?.state).toBe('SYNCED');

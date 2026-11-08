@@ -214,3 +214,16 @@ test('failed secure draft deletion never resets the form or initializes a replac
   await screen.findByText(/Pembuangan draf belum terkonfirmasi/);
   expect(disk.get(key)).toBe(before); expect(request).toHaveBeenCalledTimes(calls);
 });
+
+test.each(['REJECTED','RECONCILIATION_REQUIRED'] as const)('%s manual reconciliation after valid re-login does not reuse an old AUTH_REQUIRED logout signal', async state => {
+  const mounted = await render(view(patient(true))); await fill(); await mounted.unmount();
+  const key = [...disk.keys()].find(key => key.startsWith('telenapas.offline.item.'))!;
+  const item = JSON.parse(disk.get(key)!); disk.set(key,JSON.stringify({ ...item,state,reason:'AUTH_REQUIRED' }));
+  await render(view(patient(false,'SYNTHETIC-RELOGIN')));
+  await screen.findByRole('button',{name:'Periksa server / sinkronkan'});
+  await fireEvent.press(screen.getByRole('button',{name:'Periksa server / sinkronkan'}));
+  await waitFor(() => expect(JSON.parse(disk.get(key)!).reason).toBe('RECONCILIATION_NO_RECEIPT'));
+  expect(logout).not.toHaveBeenCalled(); expect(JSON.parse(disk.get(key)!).state).toBe(state);
+  expect(JSON.parse(disk.get(key)!).body).toEqual(item.body);
+  expect(jest.mocked(request).mock.calls.filter(call => call[0] === '/patient/assessments')).toHaveLength(0);
+});

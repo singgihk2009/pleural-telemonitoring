@@ -146,7 +146,9 @@ export class Queue {
         if (now - record.createdAt > 7 * 86400000) return retain('RECONCILIATION_REQUIRED', 'RETENTION_REVIEW');
         if (!status.data.available || !status.data.can_submit || status.data.date_wib !== record.body.date_wib || status.data.questionnaire?.version !== record.body.version)
           return retain('RECONCILIATION_REQUIRED', 'VERSION_DATE_OR_STATUS_CHANGED');
-        if (['RECONCILIATION_REQUIRED','REJECTED'].includes(record.state)) return record; // Manual reconciliation reads only.
+        // All reads succeeded: clear a stale AUTH_REQUIRED/read-outage reason without
+        // releasing quarantine or logging a newly validated session out again.
+        if (quarantine) return retain(quarantine, 'RECONCILIATION_NO_RECEIPT'); // Manual reads only.
         record = await this.save({ ...record, state: 'SYNCING', uncertain: true, attempts: manual && record.attempts >= 5 ? 1 : record.attempts + 1 }); guard();
         const response = await api<{ data: Assessment; replayed: boolean }>('/patient/assessments', record.body); guard();
         if (typeof response.replayed !== 'boolean' || !receiptMatches(record.body, response.data)) return retain('RECONCILIATION_REQUIRED', 'RECEIPT_MISMATCH');
