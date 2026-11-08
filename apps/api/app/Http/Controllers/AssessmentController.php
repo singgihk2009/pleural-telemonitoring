@@ -145,27 +145,70 @@ class AssessmentController extends Controller
     public function researcherHistory(Request $request, Participant $participant): mixed
     {
         Gate::authorize('viewFollowUps', $participant); // Existing staff-only monitoring denial, including blinded/IT scopes.
+        $filters = $request->validate([
+            'from' => ['sometimes', 'date_format:Y-m-d'],
+            'to' => ['sometimes', 'date_format:Y-m-d', ...($request->filled('from') ? ['after_or_equal:from'] : [])],
+            'type' => ['sometimes', 'in:HARIAN,ULANG'],
+        ]);
+        $filters = array_replace(['from' => null, 'to' => null, 'type' => null], $filters);
         $ids = app(ParticipantAccess::class)->monitoringVisible($request->user(), Participant::query(), true)->select('id');
         app(SecurityAudit::class)->record($request, 'privileged.access', 'AUTHORIZED', $participant->id);
 
-        return $this->page(DailyEntry::where('responden_id', $participant->id)->whereIn('responden_id', $ids));
+        $query = DailyEntry::where('responden_id', $participant->id)->whereIn('responden_id', $ids);
+        if ($filters['from'] !== null) {
+            $query->where('tanggal_wib', '>=', $filters['from']);
+        }
+        if ($filters['to'] !== null) {
+            $query->where('tanggal_wib', '<=', $filters['to']);
+        }
+        if ($filters['type'] !== null) {
+            $query->where('tipe', $filters['type']);
+        }
+
+        return $this->page($query, $filters);
     }
 
-    private function page($query): mixed
+    private function page($query, ?array $filters = null): mixed
     {
         $page = $query->with(['symptoms', 'assessmentSetting'])->orderByDesc('tanggal_wib')->orderByDesc('id')->paginate(25);
 
-        return response()->json(['data' => $page->getCollection()->map(fn ($entry) => $this->projection($entry))->all(),
-            'meta' => ['current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'total' => $page->total()]]);
+        return response()->json(['data' => $page->getCollection()->map(fn ($entry) => $this->projection($entry, $filters !== null))->all(),
+            'meta' => ['current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'total' => $page->total(), ...($filters !== null ? ['filters' => $filters] : [])]]);
     }
 
-    private function projection(DailyEntry $entry): array
+    private function projection(DailyEntry $entry, bool $historicalLabels = false): array
     {
         return ['id' => $entry->id, 'date_wib' => $entry->tanggal_wib->toDateString(), 'study_day' => $entry->hari_ke,
             'vas_mm' => $entry->vas_mm, 'type' => $entry->tipe, 'filled_by' => $entry->diisi_oleh,
             'received_at' => $entry->diterima_server_pada->toISOString(),
             'device_created_at' => $entry->dibuat_di_perangkat_pada->toISOString(),
             'version' => $entry->assessmentSetting?->versi,
-            'answers' => $entry->symptoms->map(fn ($a) => ['code' => $a->kode_gejala, 'option_id' => $a->symptom_option_id, 'value' => $a->jawaban])->all()];
+            'answers' => $entry->symptoms->map(fn ($a) => ['code' => $a->kode_gejala, 'option_id' => $a->symptom_option_id, 'value' => $a->jawaban,
+                ...($historicalLabels ? $this->historicalLabels($entry, $a->kode_gejala, $a->symptom_option_id) : [])])->all()];
+    }
+
+    private function historicalLabels(DailyEntry $entry, string $code, ?int $optionId): array
+    {
+        $empty = ['question_label' => null, 'answer_label' => null];
+        $setting = $entry->assessmentSetting;
+        $definition = $setting?->nilai_json;
+        if (! $setting || $setting->kunci !== 'daily_assessment' || ! is_array($definition)
+            || ($definition['format'] ?? null) !== 'telenapas.daily.v1' || ! is_array($definition['questions'] ?? null)) {
+            return $empty;
+        }
+        // Read the linked immutable version, never today's questionnaire or inferred wording.
+        foreach ($definition['questions'] as $question) {
+            if (! is_array($question) || ($question['code'] ?? null) !== $code || ! is_string($question['label'] ?? null)
+                || ! is_array($question['options'] ?? null)) {
+                continue;
+            }
+            foreach ($question['options'] as $option) {
+                if (is_array($option) && ($option['id'] ?? null) === $optionId && is_string($option['label'] ?? null)) {
+                    return ['question_label' => $question['label'], 'answer_label' => $option['label']];
+                }
+            }
+        }
+
+        return $empty;
     }
 }

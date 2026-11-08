@@ -15,7 +15,8 @@
     "build:mobile": "pnpm --filter @pleural/mobile build",
     "dev:up": "docker compose up -d --build --wait",
     "dev:down": "docker compose down",
-    "validate:openapi": "redocly lint docs/api/openapi.yaml --config redocly.yaml"
+    "validate:openapi": "redocly lint docs/api/openapi.yaml --config redocly.yaml",
+    "validate": "pnpm validate:openapi"
   },
   "devDependencies": {
     "@redocly/cli": "^2.72.0"

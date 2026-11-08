@@ -41,6 +41,14 @@ The current format and unapproved-content gate are documented in
 [assessment architecture](../assessment/README.md). `questionnaire_versions`
 remains exclusively the existing usability instrument foundation.
 
+## B3 read-only monitoring filters (no migration)
+
+Staff history adds inclusive `from`/`to` WIB date and stored `type` filters, ANDed with
+existing participant/CLINICAL_READ scope. `meta.filters` reports normalized values;
+25-row pagination and the existing participant/date index are retained. Staff-only
+optional question_label/answer_label derive from the entry-linked immutable instrument,
+null for missing legacy provenance. Stored code/value remains authoritative; no
+current-version relabeling, edits or inferred compliance. Patient projection unchanged.
 ## B2 reconciliation extension (no schema migration)
 
 Patient `auth/me` optionally includes the non-secret `credential_revision` already

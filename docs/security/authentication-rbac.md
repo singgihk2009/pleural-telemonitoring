@@ -299,6 +299,15 @@ principal throttle; response caching and payload/secret logging are prohibited.
 Audit codes for submission/privileged read use opaque IDs and fixed outcome codes.
 See [architecture and recovery guarantees](../assessment/README.md).
 
+### B3 monitoring reads
+
+Date/type filtering executes after the existing staff-only monitoring policy, within
+its unchanged participant query scope. Explicit CLINICAL_READ never follows from
+TECHNICAL/CONTACT. No contact fields are added. Historical labels are plain React text
+from entry-linked immutable settings, not current definitions. Dashboard rejects an
+absent/mismatched applied-filter echo and aborts stale reads on participant/tokenchange.
+No browser persistence, offline-state disclosure, assessment mutation or inferred
+clinical/compliance decision. Privileged-access auditing remains redacted.
 ### B2 encrypted pending assessments
 
 Patient-only profile metadata exposes the existing opaque credential revision for
