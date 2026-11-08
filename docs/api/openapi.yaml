@@ -23,6 +23,9 @@ tags:
 - name: Assessments
   description: Approved-version patient daily submissions and policy-scoped immutable history; no classification
     or alerts
+- name: Instrument publication
+  description: Explicit researcher publication of separately approved definitions; no default clinical
+    content
 paths:
   /api/v1/health:
     get:
@@ -1113,6 +1116,66 @@ paths:
         schema:
           type: integer
           minimum: 1
+  /api/v1/research/daily-instruments:
+    get:
+      operationId: listDailyInstruments
+      tags:
+      - Instrument publication
+      summary: Review immutable daily instrument versions and approval metadata
+      description: Authorized non-assessor, non-IT researcher only. Twenty-five per page. Includes future/expired
+        definitions for review; patient adapter still fails closed for invalid/expired current versions.
+        Legacy signed settings remain compatible. Does not publish or score.
+      security: *id001
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Current version plus paginated immutable versions, raw definitions, approver/time,
+            approval reference, expiry and current_page/last_page.
+        '401': &id005
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id006
+          $ref: '#/components/responses/Forbidden'
+        '429': &id007
+          $ref: '#/components/responses/TooManyAttempts'
+  /api/v1/research/daily-instruments/publish:
+    post:
+      operationId: publishDailyInstrument
+      tags:
+      - Instrument publication
+      summary: Explicitly publish a separately approved instrument
+      description: No automatic publication. Server derives approving researcher identity/time; requires
+        external approval reference and explicit confirmation. Existing researcher-role row serializes
+        publishers, then staff/token authority is rechecked. Creates immutable setting/options/publication
+        and audit atomically. No patient data or scoring. A changed current version or duplicate version/effective
+        time conflicts; no silent overwrite or fallback after expiry. Future activation and expiry must
+        be explicitly approved, not inferred from examples.
+      security: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstrumentPublicationInput'
+      responses:
+        '201':
+          description: Version, approving actor/time, effective time, expiry and approval reference. No
+            patient credentials.
+        '409':
+          description: Stale expected version, elapsed activation, duplicate version/effective time or
+            rare catalog key collision. Nothing partially published; reload/review before another explicit
+            action.
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '503':
+          description: Storage failed; transaction rolled back, SQL/definition values excluded from logs.
+        '401': *id005
+        '403': *id006
+        '429': *id007
 components:
   schemas:
     CredentialRevision:
