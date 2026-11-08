@@ -18,3 +18,11 @@ lint/typecheck/OpenAPI/Composer/Pint/build/export and real Chromium UAT. See [ac
 and [architecture/UAT/rollback](dashboard-monitoring.md). Local tests are distinct
 from unavailable hosted Actions or signed-device UAT. No merge/deployment/EAS build.
 Human review required; branches are independently based on merged PR11 main.
+
+PR14 correction: latest main323f13b includes merged PR13. Retained complete
+PublicationQuestion/InstrumentPublicationInput schemas, PR14 filters/historical labels
+and PR13 exact-UUID recovery/revision metadata. Added root pnpm validate alias.
+Integrated validation: API242/2115 assertions; mobile157/dashboard53; all migration
+and concurrency suites; lint/types/OpenAPI/build/export; fresh real-HTTP queue recovery
+and real-browser dashboard UAT. See [current repair verification](pr14-openapi-fix.md).
+Hosted Actions must be checked on the new head; no automatic merge/deployment.
