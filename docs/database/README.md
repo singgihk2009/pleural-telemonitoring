@@ -142,3 +142,6 @@ test-only, with no clinical meaning. There is no automatic factory seeder.
 
 PR-11 adds [daily assessment provenance v1.4](daily-assessment-v1.4.md), preserving
 legacy immutable entries and requiring an approved instrument before ingestion.
+
+Stage B1 adds immutable publication receipts with approval reference and explicit
+expiry; see [publication workflow](../stage-b/instrument-publication.md).

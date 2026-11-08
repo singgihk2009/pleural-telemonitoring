@@ -5,6 +5,8 @@ namespace App\Assessment;
 use App\Auth\ResearchRoleCode;
 use App\Models\ResearchSetting;
 use App\Models\SymptomOption;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 /** Technical adapter only. No default instrument, schedule, scoring or classification. */
@@ -13,12 +15,16 @@ class DailyInstrument
     public function current(): ?ResearchSetting
     {
         $versions = ResearchSetting::where('kunci', 'daily_assessment')
-            ->whereNotNull('disetujui_oleh')->where('disetujui_pada', '<=', now())
-            ->whereNotNull('berlaku_mulai')->where('berlaku_mulai', '<=', now())
+            ->whereNotNull('disetujui_oleh')->where('disetujui_pada', '<=', now()->format('Y-m-d H:i:s.u'))
+            ->whereNotNull('berlaku_mulai')->where('berlaku_mulai', '<=', now()->format('Y-m-d H:i:s.u'))
             ->orderByDesc('berlaku_mulai')->limit(2)->get();
         $setting = $versions->first();
         // Ambiguous activation, invalid latest version or approval never falls back silently.
         if (! $setting || ($versions->count() > 1 && $versions[1]->berlaku_mulai->equalTo($setting->berlaku_mulai))) {
+            return null;
+        }
+        $publication = DB::table('instrument_publications')->where('setting_id', $setting->id)->first();
+        if ($publication && CarbonImmutable::parse($publication->expires_at, 'UTC')->lessThanOrEqualTo(now())) {
             return null;
         }
         $approver = $setting->approver;

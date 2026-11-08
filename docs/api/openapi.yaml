@@ -23,6 +23,9 @@ tags:
 - name: Assessments
   description: Approved-version patient daily submissions and policy-scoped immutable history; no classification
     or alerts
+- name: Instrument publication
+  description: Explicit researcher publication of separately approved definitions; no default clinical
+    content
 paths:
   /api/v1/health:
     get:
@@ -1102,6 +1105,66 @@ paths:
         schema:
           type: integer
           minimum: 1
+  /api/v1/research/daily-instruments:
+    get:
+      operationId: listDailyInstruments
+      tags:
+      - Instrument publication
+      summary: Review immutable daily instrument versions and approval metadata
+      description: Authorized non-assessor, non-IT researcher only. Twenty-five per page. Includes future/expired
+        definitions for review; patient adapter still fails closed for invalid/expired current versions.
+        Legacy signed settings remain compatible. Does not publish or score.
+      security: *id001
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Current version plus paginated immutable versions, raw definitions, approver/time,
+            approval reference, expiry and current_page/last_page.
+        '401': &id005
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id006
+          $ref: '#/components/responses/Forbidden'
+        '429': &id007
+          $ref: '#/components/responses/TooManyAttempts'
+  /api/v1/research/daily-instruments/publish:
+    post:
+      operationId: publishDailyInstrument
+      tags:
+      - Instrument publication
+      summary: Explicitly publish a separately approved instrument
+      description: No automatic publication. Server derives approving researcher identity/time; requires
+        external approval reference and explicit confirmation. Existing researcher-role row serializes
+        publishers, then staff/token authority is rechecked. Creates immutable setting/options/publication
+        and audit atomically. No patient data or scoring. A changed current version or duplicate version/effective
+        time conflicts; no silent overwrite or fallback after expiry. Future activation and expiry must
+        be explicitly approved, not inferred from examples.
+      security: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstrumentPublicationInput'
+      responses:
+        '201':
+          description: Version, approving actor/time, effective time, expiry and approval reference. No
+            patient credentials.
+        '409':
+          description: Stale expected version, elapsed activation, duplicate version/effective time or
+            rare catalog key collision. Nothing partially published; reload/review before another explicit
+            action.
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '503':
+          description: Storage failed; transaction rolled back, SQL/definition values excluded from logs.
+        '401': *id005
+        '403': *id006
+        '429': *id007
 components:
   schemas:
     CredentialRevision:
@@ -2188,6 +2251,106 @@ components:
             total:
               type: integer
               minimum: 0
+    PublicationQuestion:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - label
+      - required
+      - options
+      properties:
+        code:
+          type: string
+          pattern: ^[A-Z0-9_]{1,48}$
+        label:
+          type: string
+          maxLength: 300
+        required:
+          type: boolean
+        options:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - value
+            - label
+            properties:
+              label:
+                type: string
+                maxLength: 150
+              value:
+                type: string
+                pattern: ^[A-Z0-9_-]{1,32}$
+          minItems: 1
+          maxItems: 20
+    InstrumentPublicationInput:
+      type: object
+      additionalProperties: false
+      required:
+      - version
+      - expected_current_version
+      - confirm_publication
+      - approval_reference
+      - effective_at
+      - expires_at
+      - schedule
+      - questions
+      properties:
+        version:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,40}$
+        expected_current_version:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+        confirm_publication:
+          type: boolean
+          const: true
+        approval_reference:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,80}$
+        effective_at:
+          type: string
+          format: date-time
+          description: UTC with milliseconds and Z; explicit future approved activation.
+        expires_at:
+          type: string
+          format: date-time
+          description: UTC with milliseconds and Z, after activation.
+        schedule:
+          type: object
+          additionalProperties: false
+          required:
+          - timezone
+          - first_day
+          - last_day
+          - late_policy
+          properties:
+            timezone:
+              type: string
+              enum:
+              - Asia/Jakarta
+            first_day:
+              type: integer
+              minimum: 1
+              maximum: 30
+            last_day:
+              type: integer
+              minimum: 1
+              maximum: 30
+            late_policy:
+              type: string
+              enum:
+              - same_day_only
+        questions:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/PublicationQuestion'
   securitySchemes:
     bearerAuth:
       type: http

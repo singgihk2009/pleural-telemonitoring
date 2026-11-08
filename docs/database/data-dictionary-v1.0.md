@@ -443,3 +443,9 @@ See [daily assessment v1.4](daily-assessment-v1.4.md) for nullable immutable
 and canonical retry semantics. `pengaturan` daily_assessment versions and exact
 symptom catalog references are consumed only after approval/effectivity/shape
 validation. No clinical definitions, scores or schedules are seeded.
+
+Stage B1: instrument_publications.setting_id is a restrictive primary/FK to
+pengaturan.id. approval_reference VARCHAR80 is an opaque external approval code;
+effective_at DATETIME(6) is unique and expires_at DATETIME(6) must be later.
+Receipts reject UPDATE/DELETE; approval actor/time remain in pengaturan. No content
+is seeded and legacy records receive no fabricated approval/expiry receipt.
