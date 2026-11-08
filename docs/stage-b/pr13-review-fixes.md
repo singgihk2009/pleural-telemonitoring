@@ -1,6 +1,6 @@
 # PR13 review corrections — 8 November 2026 WIB
 
-Target: existing feature/stage-b-encrypted-offline-sync /PR13. Runtime fix4c927fa.
+Target: existing feature/stage-b-encrypted-offline-sync /PR13. Runtime core/DRAFT fix4c927fa; manual-only wording26da1ff; verified-read auth-recovery follow-up39c4f2e.
 Base inspected: remote PR13 head36673b1, main d5d39d2 (merged PR12), PR14 headd793ea2.
 PR14 was unmerged during verification. No production data/infrastructure was used.
 
@@ -15,7 +15,11 @@ claim. Authentication failures retain quarantine with AUTH_REQUIRED and invoke t
 existing scope-guarded logout.409/422 reads likewise cannot unquarantine an item.
 Manual reconciliation is read-only: no matching receipt leaves quarantine; exact
 independently checked server history may become SYNCED; mismatch requires review.
-No failed read can enable a later automatic POST. No PIN/token enters the queue.
+No failed read can enable a later automatic POST. After all manual reads succeed
+without a matching receipt, the state remains quarantined and its operational
+reason becomes RECONCILIATION_NO_RECEIPT. This clears a stale AUTH_REQUIRED signal
+without logging a newly validated session out again; two re-login UI regressions
+and all36 error/GET-stage cases verify it. No PIN/token enters the queue.
 
 ## Obsolete DRAFT recovery
 
@@ -60,7 +64,7 @@ controller was copied over a newer implementation.
 | Check | Actual result |
 |---|---|
 | PR13 full Laravel/MySQL8.4/PHP8.4 | PASS239 tests /2062 assertions; four opt-ins separately |
-| Mobile Jest | PASS155 tests (61 additional cases), including 36 state/error/GET-stage combinations, restart/foreground, logout, exact vs mismatched receipt, draft date rollover/disposal/races |
+| Mobile Jest | PASS157 tests (63 additional cases), including 36 state/error/GET-stage combinations, restart/foreground, logout, exact vs mismatched receipt, draft date rollover/disposal/races |
 | Dashboard PR13 /composed PR14 | PASS49 /53 tests |
 | All migration lifecycle/historical upgrades | PASS13/13/19/9 assertions, each fresh isolated schema |
 | Real-process credential/assessment concurrency | PASS; CAS, resets/revocations, immutable replay/daily uniqueness and mutation audits |
@@ -112,3 +116,21 @@ cannot authorize disposal; sticky quarantine prevents implicit POST after GET fa
 exact receipt verification alone releases a reconciled item. Server policies, grant
 scopes, immutable records, approved eligibility and revocation remain unchanged.
 This local review is not a claim of a fresh remote Codex/security approval.
+
+## Actual native UAT results
+
+PASS: actual process restart across the isolated server WIB midnight retained the
+old draft/date/UUID with zero POST; cancel kept it; confirmed disposal fetched a new
+server date/UUID and unselected VAS. PASS: proxy422 quarantine followed by manual503
+remained REJECTED across foreground and process restart, with zero additional POST.
+PASS: after verified empty history and the stronger explicit warning, a fresh draft
+queued with delivery blocked, then reconnected with201 dropped after commit. Own
+exact-UUID history supplied the receipt with one forwarded POST, one immutable
+entry/answer/submission audit, fixed redacted audit metadata and zero classification/
+alert/notification effects. Final source reloaded before receipt restore and logout.
+See [versioned screenshot evidence/method/limits](screenshots/pr13-fix/README.md).
+The full native failure matrix is not claimed;157 Jest tests cover both states and
+all requested failure classes, including successful re-login after an old auth failure.
+
+Final-source receipt restore/logout PASS: no new POST; native login screen shown;
+independent MySQL token count1→0 and immutable observation retained.

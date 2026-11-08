@@ -23,7 +23,7 @@ No cloud build, merge or deployment. Human review and integrated synthetic UAT r
 
 PR13 pre-merge corrections: sticky quarantine across failed read-only reconciliation,
 confirmed UUID/state-checked disposal of unsubmitted obsolete drafts, and fresh
-server-day eligibility after removal. Mobile155 and MySQL239/2062 pass; the PR14
+server-day eligibility after removal. Mobile157 and MySQL239/2062 pass; the PR14
 compatibility copy passes API242/2115 and dashboard53 after explicitly retaining
 PublicationQuestion/InstrumentPublicationInput omitted by PR14's current head.
 See [current review-fix verification](pr13-review-fixes.md) for conflicts, native
