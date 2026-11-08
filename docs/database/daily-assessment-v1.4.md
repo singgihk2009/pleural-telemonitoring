@@ -40,3 +40,13 @@ one-daily uniqueness prevents two different UUIDs committing on the same WIB day
 The current format and unapproved-content gate are documented in
 [assessment architecture](../assessment/README.md). `questionnaire_versions`
 remains exclusively the existing usability instrument foundation.
+
+## B2 reconciliation extension (no schema migration)
+
+Patient `auth/me` optionally includes the non-secret `credential_revision` already
+stored by PR10; it is not a token, PIN or password hash. Legacy NULL disables
+persistent queue mode. Own assessment history accepts an optional exact UUID
+`submission_id` filter, always ANDed with the authenticated participant identity.
+No other patient's entry is disclosed. The Android encrypted local record is not
+part of this MySQL dictionary and is never a server receipt; see
+[offline storage/lifecycle contract](../stage-b/offline-sync.md).

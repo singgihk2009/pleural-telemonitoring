@@ -72,6 +72,22 @@ class DailyAssessmentTest extends TestCase
             'answers' => [['code' => 'SYNTHETIC_ITEM', 'option_id' => $setting->nilai_json['questions'][0]['options'][0]['id']]]];
     }
 
+    public function test_exact_uuid_history_reconciliation_is_owner_scoped_and_never_enumerates_foreign_entries(): void
+    {
+        $setting = SyntheticDailyInstrument::create();
+        $patient = $this->patient();
+        $token = $this->token($patient);
+        $body = $this->body($setting);
+        $this->api($token, 'POST', body: $body)->assertCreated();
+        DailyEntry::factory()->repeat()->create(['responden_id' => $patient->responden_id]);
+        $other = $this->patient();
+        $foreign = $this->body($setting);
+        $this->api($this->token($other), 'POST', body: $foreign)->assertCreated();
+        $this->api($token, 'GET', '/patient/assessments?submission_id='.$body['submission_id'])->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $body['submission_id']);
+        $this->api($token, 'GET', '/patient/assessments?submission_id='.$foreign['submission_id'])->assertOk()->assertJsonPath('meta.total', 0)->assertJsonPath('data', []);
+        $this->api($token, 'GET', '/patient/assessments?submission_id=INVALID')->assertUnprocessable();
+    }
+
     public function test_unapproved_catalog_is_unavailable_and_no_write_is_possible(): void
     {
         $token = $this->token($this->patient());

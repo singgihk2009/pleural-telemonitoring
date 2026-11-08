@@ -1012,12 +1012,21 @@ paths:
         '401': *id002
         '403': *id003
         '429': *id004
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
       parameters:
       - in: query
         name: page
         schema:
           type: integer
           minimum: 1
+      - name: submission_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+        description: Exact own UUID lookup for reconciliation. Unknown/foreign UUID returns an empty page,
+          never another participant record; malformed UUID422.
     post:
       operationId: submitPatientAssessment
       summary: Submit an approved daily assessment
@@ -1277,6 +1286,14 @@ components:
             - PENELITI_UTAMA
             - PENILAI_HASIL
             - ADMIN_IT
+        credential_revision:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Patient-only non-secret credential revision for encrypted local queue isolation.
+            Staff responses omit it; legacy NULL disables persistent queue. PIN/reset/revocation semantics
+            are unchanged.
     ParticipantSummary:
       type: object
       additionalProperties: false
@@ -2235,6 +2252,7 @@ components:
               type: integer
               minimum: 0
     PublicationQuestion:
+      description: An explicitly approved question definition with allowed choices, not an illustrative clinical catalog.
       type: object
       additionalProperties: false
       required:
@@ -2269,6 +2287,7 @@ components:
           minItems: 1
           maxItems: 20
     InstrumentPublicationInput:
+      description: Explicit approved publication. Approval actor and time are server-derived; no clinical evaluation is performed.
       type: object
       additionalProperties: false
       required:

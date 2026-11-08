@@ -69,6 +69,7 @@ class AuthController extends Controller
             'id' => (string) $actor->getKey(),
             'kind' => $actor instanceof StaffUser ? 'staff' : 'patient',
             'roles' => $actor instanceof StaffUser ? $actor->roleCodes() : [ResearchRoleCode::Patient->value],
+            ...($actor instanceof PatientCredential ? ['credential_revision' => $actor->revision] : []),
         ]]);
     }
 
