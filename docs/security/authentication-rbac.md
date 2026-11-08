@@ -315,3 +315,10 @@ permission and fresh staff/token checks under serialization. Approval actor/time
 are server derived; settings/options/publication/audit are atomic and immutable.
 No new patient-data access or clinical grants are implied. See the
 [publication security/rollback notes](../stage-b/instrument-publication.md).
+
+PR13 quarantine and local disposal corrections: failed manual reconciliation reads
+cannot re-enable automatic delivery. Authentication failures retain the encrypted
+quarantine while invoking existing guarded logout. Simplified disposal requires an
+unsubmitted DRAFT with the expected UUID under the queue mutex and verified deletion;
+all potentially submitted states retain the existing reconciliation protections.
+No auth/RBAC policy, token expiry default or database constraint is weakened.

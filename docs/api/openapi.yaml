@@ -2252,6 +2252,7 @@ components:
               type: integer
               minimum: 0
     PublicationQuestion:
+      description: An explicitly approved question definition with allowed choices, not an illustrative clinical catalog.
       type: object
       additionalProperties: false
       required:
@@ -2286,6 +2287,7 @@ components:
           minItems: 1
           maxItems: 20
     InstrumentPublicationInput:
+      description: Explicit approved publication. Approval actor and time are server-derived; no clinical evaluation is performed.
       type: object
       additionalProperties: false
       required:

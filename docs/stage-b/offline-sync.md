@@ -107,3 +107,14 @@ Remaining design differences from PDF: no colored clinical F4; durable local sta
 are not risk levels; F9 uses server observations rather than invented compliance/
 classification; no offline late-date substitution, background jobs or automatic alerts.
 See screenshots/B2 evidence index and validation-b2.md (actual emulator vs export).
+
+## PR13 corrections
+
+Quarantine is sticky across failed manual read-only reconciliation, including
+network/429/5xx and authentication failures; logout retains the encrypted state.
+Neither restart nor foreground can automatically POST that item. Exact server
+receipt verification is the only successful reconciliation. DRAFT-only disposal
+has its own confirmed, UUID/state-checked operation and displays the original WIB
+date and loss warning. It cannot clear potentially submitted states. Verified
+removal triggers fresh server date/instrument/eligibility and an unselected form.
+See [review corrections and integration decisions](pr13-review-fixes.md).
