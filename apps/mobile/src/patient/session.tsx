@@ -57,7 +57,7 @@ export function PatientProvider({ children }: PropsWithChildren) {
   async function identity(session: Session): Promise<Profile> {
     if (Date.parse(session.expires) <= Date.now())
       throw new ApiError(401, 'Sesi berakhir. Silakan masuk kembali.');
-    const me = await request<{ data: { id: string; kind: string } }>('/auth/me', session.token);
+    const me = await request<{ data: { id: string; kind: string; credential_revision?: string | null } }>('/auth/me', session.token);
     if (me.data.kind !== 'patient') throw new ApiError(403, 'Akun ini bukan akun pasien.');
     const result = await request<{ data: Profile }>(
       `/participants/${encodeURIComponent(me.data.id)}`,
@@ -69,6 +69,7 @@ export function PatientProvider({ children }: PropsWithChildren) {
       id: result.data.id,
       status: result.data.status,
       tanggal_pulang: result.data.tanggal_pulang,
+      credential_revision: me.data.credential_revision,
     };
   }
   async function restore() {

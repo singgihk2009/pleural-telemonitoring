@@ -133,7 +133,13 @@ class AssessmentController extends Controller
     {
         $patient = $this->patient($request);
 
-        return $this->page(DailyEntry::where('responden_id', $patient->responden_id));
+        $filter = $request->validate(['submission_id' => ['sometimes', 'uuid']]);
+        $query = DailyEntry::where('responden_id', $patient->responden_id);
+        if (isset($filter['submission_id'])) {
+            $query->whereKey(strtolower($filter['submission_id']));
+        }
+
+        return $this->page($query);
     }
 
     public function researcherHistory(Request $request, Participant $participant): mixed

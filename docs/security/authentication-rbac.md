@@ -308,3 +308,26 @@ from entry-linked immutable settings, not current definitions. Dashboard rejects
 absent/mismatched applied-filter echo and aborts stale reads on participant/tokenchange.
 No browser persistence, offline-state disclosure, assessment mutation or inferred
 clinical/compliance decision. Privileged-access auditing remains redacted.
+### B2 encrypted pending assessments
+
+Patient-only profile metadata exposes the existing opaque credential revision for
+local namespace isolation, never a PIN/hash. Staff profile responses omit it.
+Exact UUID history lookup retains owner scoping and all existing credential checks.
+Offline data is unlocked only after server identity/revision validation. Transport
+captures the original token, foreground scope changes stop further sends, and an
+in-flight request may still commit. Logout hides RAM state immediately and preserves
+encrypted uncertain copies. No offline remote-revocation/secure-flash-erasure claim.
+See [queue security and rollback limits](../stage-b/offline-sync.md).
+
+Stage B1 instrument publication reuses researcher-only deny-first enrollment
+permission and fresh staff/token checks under serialization. Approval actor/time
+are server derived; settings/options/publication/audit are atomic and immutable.
+No new patient-data access or clinical grants are implied. See the
+[publication security/rollback notes](../stage-b/instrument-publication.md).
+
+PR13 quarantine and local disposal corrections: failed manual reconciliation reads
+cannot re-enable automatic delivery. Authentication failures retain the encrypted
+quarantine while invoking existing guarded logout. Simplified disposal requires an
+unsubmitted DRAFT with the expected UUID under the queue mutex and verified deletion;
+all potentially submitted states retain the existing reconciliation protections.
+No auth/RBAC policy, token expiry default or database constraint is weakened.

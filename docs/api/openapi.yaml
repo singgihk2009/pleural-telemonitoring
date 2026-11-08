@@ -1012,12 +1012,21 @@ paths:
         '401': *id002
         '403': *id003
         '429': *id004
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
       parameters:
       - in: query
         name: page
         schema:
           type: integer
           minimum: 1
+      - name: submission_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+        description: Exact own UUID lookup for reconciliation. Unknown/foreign UUID returns an empty page,
+          never another participant record; malformed UUID422.
     post:
       operationId: submitPatientAssessment
       summary: Submit an approved daily assessment
@@ -1297,6 +1306,14 @@ components:
             - PENELITI_UTAMA
             - PENILAI_HASIL
             - ADMIN_IT
+        credential_revision:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Patient-only non-secret credential revision for encrypted local queue isolation.
+            Staff responses omit it; legacy NULL disables persistent queue. PIN/reset/revocation semantics
+            are unchanged.
     ParticipantSummary:
       type: object
       additionalProperties: false
@@ -2275,6 +2292,108 @@ components:
                 type:
                   type: [string, 'null']
                   enum: [HARIAN, ULANG, null]
+    PublicationQuestion:
+      description: An explicitly approved question definition with allowed choices, not an illustrative clinical catalog.
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - label
+      - required
+      - options
+      properties:
+        code:
+          type: string
+          pattern: ^[A-Z0-9_]{1,48}$
+        label:
+          type: string
+          maxLength: 300
+        required:
+          type: boolean
+        options:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - value
+            - label
+            properties:
+              label:
+                type: string
+                maxLength: 150
+              value:
+                type: string
+                pattern: ^[A-Z0-9_-]{1,32}$
+          minItems: 1
+          maxItems: 20
+    InstrumentPublicationInput:
+      description: Explicit approved publication. Approval actor and time are server-derived; no clinical evaluation is performed.
+      type: object
+      additionalProperties: false
+      required:
+      - version
+      - expected_current_version
+      - confirm_publication
+      - approval_reference
+      - effective_at
+      - expires_at
+      - schedule
+      - questions
+      properties:
+        version:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,40}$
+        expected_current_version:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+        confirm_publication:
+          type: boolean
+          const: true
+        approval_reference:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,80}$
+        effective_at:
+          type: string
+          format: date-time
+          description: UTC with milliseconds and Z; explicit future approved activation.
+        expires_at:
+          type: string
+          format: date-time
+          description: UTC with milliseconds and Z, after activation.
+        schedule:
+          type: object
+          additionalProperties: false
+          required:
+          - timezone
+          - first_day
+          - last_day
+          - late_policy
+          properties:
+            timezone:
+              type: string
+              enum:
+              - Asia/Jakarta
+            first_day:
+              type: integer
+              minimum: 1
+              maximum: 30
+            last_day:
+              type: integer
+              minimum: 1
+              maximum: 30
+            late_policy:
+              type: string
+              enum:
+              - same_day_only
+        questions:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/PublicationQuestion'
   securitySchemes:
     bearerAuth:
       type: http

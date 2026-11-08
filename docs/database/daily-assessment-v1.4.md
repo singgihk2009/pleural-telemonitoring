@@ -49,3 +49,12 @@ existing participant/CLINICAL_READ scope. `meta.filters` reports normalized valu
 optional question_label/answer_label derive from the entry-linked immutable instrument,
 null for missing legacy provenance. Stored code/value remains authoritative; no
 current-version relabeling, edits or inferred compliance. Patient projection unchanged.
+## B2 reconciliation extension (no schema migration)
+
+Patient `auth/me` optionally includes the non-secret `credential_revision` already
+stored by PR10; it is not a token, PIN or password hash. Legacy NULL disables
+persistent queue mode. Own assessment history accepts an optional exact UUID
+`submission_id` filter, always ANDed with the authenticated participant identity.
+No other patient's entry is disclosed. The Android encrypted local record is not
+part of this MySQL dictionary and is never a server receipt; see
+[offline storage/lifecycle contract](../stage-b/offline-sync.md).
