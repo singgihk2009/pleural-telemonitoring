@@ -7,6 +7,7 @@ export type Context = {
   initialize(status: AssessmentStatus): Promise<Record | undefined>;
   update(body: Pick<DraftBody,'vas_mm' | 'filled_by' | 'answers'>): Promise<Record | undefined>;
   confirm(): Promise<Record | undefined>; discard(confirmed: boolean): Promise<void>;
+  discardDraft(submissionId: string): Promise<boolean>;
   synchronize(manual?: boolean): Promise<void>;
 };
 export const OfflineContext = createContext<Context | null>(null);

@@ -1,5 +1,5 @@
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react-native';
-import { Platform, AppState, type AppStateStatus } from 'react-native';
+import { Platform, AppState, Alert, type AppStateStatus } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { PatientContext, type Context } from './src/patient/context';
 import { OfflineProvider } from './src/patient/offline/Provider';
@@ -130,4 +130,86 @@ test('unknown initial AppState cannot start a worker until foreground is observe
   expect(jest.mocked(request).mock.calls.filter(call => call[0] === '/patient/assessments')).toHaveLength(0);
   await act(() => listeners.forEach(listener => listener('active')));
   await screen.findByText('Isian berhasil tersimpan');
+});
+
+test('obsolete unsubmitted draft survives restart unchanged until confirmed discard then loads the new server day', async () => {
+  const mounted = await render(view(patient(true))); await fill();
+  const itemKey = [...disk.keys()].find(key => key.startsWith('telenapas.offline.item.'))!;
+  const original = JSON.parse(disk.get(itemKey)!).body;
+  await mounted.unmount();
+  const next = { ...snapshot, date_wib: new Date(Date.parse(snapshot.date_wib)+86400000).toISOString().slice(0,10), study_day: 2,
+    submission_id: '44444444-4444-4444-8444-444444444444', questionnaire: { ...snapshot.questionnaire!, version: 'SYNTHETIC_V2' } };
+  const prior = jest.mocked(request).getMockImplementation()!;
+  jest.mocked(request).mockImplementation((path,...args) => path.endsWith('/status') ? Promise.resolve({ data: next }) : prior(path,...args));
+  const alert = jest.spyOn(Alert,'alert'); await render(view());
+  await screen.findByText(`Draf belum dikirim · tanggal ${snapshot.date_wib} WIB.`);
+  expect(JSON.parse(disk.get(itemKey)!).body).toEqual(original);
+  await fireEvent.press(screen.getByRole('button',{name:'Buang draf belum dikirim…'}));
+  const [,message,buttons] = alert.mock.calls[0];
+  expect(message).toContain(snapshot.date_wib); expect(message).toContain('menghilangkan jawaban lokal');
+  await act(() => buttons?.find(button => button.text === 'Batal')?.onPress?.());
+  expect(JSON.parse(disk.get(itemKey)!).body).toEqual(original);
+  await act(() => buttons?.find(button => button.text === 'Buang draf')?.onPress?.());
+  await screen.findByText(`Draf belum dikirim · tanggal ${next.date_wib} WIB.`);
+  expect(screen.getByText('— — mm')).toBeTruthy();
+  expect(JSON.parse(disk.get(itemKey)!).body).toMatchObject({ date_wib: next.date_wib, submission_id: next.submission_id, version:'SYNTHETIC_V2', vas_mm:null, filled_by:null, answers:[] });
+  expect(jest.mocked(request).mock.calls.filter(call => call[0] === '/patient/assessments')).toHaveLength(0);
+  await fill(); await fireEvent.press(screen.getByRole('button',{name:'Simpan aman dan antrekan isian'}));
+  await screen.findByText('Isian berhasil tersimpan');
+  const posts = jest.mocked(request).mock.calls.filter(call => call[0] === '/patient/assessments');
+  expect(posts).toHaveLength(1); expect(posts[0][2]).toMatchObject({ date_wib:next.date_wib, submission_id:next.submission_id,version:'SYNTHETIC_V2' });
+});
+test.each(['PENDING_SYNC','SYNCING','REJECTED','RECONCILIATION_REQUIRED'] as const)('%s never exposes simplified draft disposal', async state => {
+  const mounted = await render(view(patient(true))); await fill(); await mounted.unmount();
+  const key = [...disk.keys()].find(key => key.startsWith('telenapas.offline.item.'))!;
+  disk.set(key,JSON.stringify({ ...JSON.parse(disk.get(key)!),state }));
+  await render(view(patient(true)));
+  await screen.findByRole('button',{name:'Periksa server / sinkronkan'});
+  expect(screen.queryByRole('button',{name:'Buang draf belum dikirim…'})).toBeNull();
+  expect(screen.getByRole('button',{name:'Buang isian lokal…'})).toBeTruthy();
+});
+
+test.each((['REJECTED','RECONCILIATION_REQUIRED'] as const).flatMap(state => [0,429,503,401,403].map(status => ({state,status}))))('$state stays read-only after a manual $status failure, foreground and restart', async ({state,status}) => {
+  const listeners: ((state: AppStateStatus) => void)[] = [];
+  jest.spyOn(AppState,'addEventListener').mockImplementation((_event,listener) => { listeners.push(listener); return {remove:jest.fn()}; });
+  const mounted = await render(view(patient(true))); await fill(); await mounted.unmount();
+  const key = [...disk.keys()].find(key => key.startsWith('telenapas.offline.item.'))!;
+  const item = JSON.parse(disk.get(key)!); disk.set(key,JSON.stringify({...item,state}));
+  const prior = jest.mocked(request).getMockImplementation()!;
+  jest.mocked(request).mockImplementation((path,...args) => path === '/auth/me' ? Promise.reject(new ApiError(status,'Synthetic reconciliation failure')) : prior(path,...args));
+  const restored = await render(view());
+  await screen.findByRole('button',{name:'Periksa server / sinkronkan'});
+  await fireEvent.press(screen.getByRole('button',{name:'Periksa server / sinkronkan'}));
+  await waitFor(() => expect(JSON.parse(disk.get(key)!).reason).toBe(status===401 || status===403 ? 'AUTH_REQUIRED' : 'RECONCILIATION_READ_FAILED'));
+  expect(JSON.parse(disk.get(key)!).state).toBe(state); expect(JSON.parse(disk.get(key)!).body).toEqual(item.body);
+  if (status===401 || status===403) expect(logout).toHaveBeenCalledTimes(1);
+  await act(() => listeners.forEach(listener => listener('background')));
+  await act(() => listeners.forEach(listener => listener('active')));
+  await restored.unmount(); await render(view());
+  await screen.findByRole('button',{name:'Periksa server / sinkronkan'});
+  expect(JSON.parse(disk.get(key)!).state).toBe(state);
+  expect(jest.mocked(request).mock.calls.filter(call => call[0] === '/patient/assessments')).toHaveLength(0);
+});
+test('a stale draft confirmation cannot dispose an item queued while the dialog was open', async () => {
+  await render(view(patient(true))); await fill();
+  const alert = jest.spyOn(Alert,'alert');
+  await fireEvent.press(screen.getByRole('button',{name:'Buang draf belum dikirim…'}));
+  const buttons = alert.mock.calls[0][2];
+  await fireEvent.press(screen.getByRole('button',{name:'Simpan aman dan antrekan isian'}));
+  await screen.findByText(/Belum ada tanda terima server/);
+  const key = [...disk.keys()].find(key => key.startsWith('telenapas.offline.item.'))!; const before = disk.get(key);
+  await act(() => buttons?.find(button => button.text==='Buang draf')?.onPress?.());
+  await screen.findByText(/Pembuangan draf belum terkonfirmasi/);
+  expect(disk.get(key)).toBe(before); expect(SecureStore.deleteItemAsync).not.toHaveBeenCalled();
+});
+test('failed secure draft deletion never resets the form or initializes a replacement', async () => {
+  await render(view(patient(true))); await fill();
+  const key = [...disk.keys()].find(key => key.startsWith('telenapas.offline.item.'))!; const before = disk.get(key);
+  const calls = jest.mocked(request).mock.calls.length;
+  jest.mocked(SecureStore.deleteItemAsync).mockRejectedValue(new Error('Synthetic deletion failure'));
+  const alert = jest.spyOn(Alert,'alert');
+  await fireEvent.press(screen.getByRole('button',{name:'Buang draf belum dikirim…'}));
+  await act(() => alert.mock.calls[0][2]?.find(button => button.text==='Buang draf')?.onPress?.());
+  await screen.findByText(/Pembuangan draf belum terkonfirmasi/);
+  expect(disk.get(key)).toBe(before); expect(request).toHaveBeenCalledTimes(calls);
 });

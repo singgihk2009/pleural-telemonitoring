@@ -140,3 +140,51 @@ test('write/readback failures and corrupted records fail closed without a post o
   const raw = disk.get()!; disk.put('{broken'); await expect(queue.read()).rejects.toThrow(); expect(disk.io.remove).not.toHaveBeenCalled();
   expect(() => decode(JSON.stringify({ ...JSON.parse(raw), body: { ...item.body, pin: 'SYNTHETIC' } }))).toThrow();
 });
+
+const quarantineFailures = (['REJECTED','RECONCILIATION_REQUIRED'] as const).flatMap(state =>
+  [0,429,500,503,401,403].flatMap(status => ['identity','status','history'].map(stage => ({ state, status, stage }))));
+test.each(quarantineFailures)('$state preserves quarantine after $status at $stage and can never auto-POST', async ({ state, status, stage }) => {
+  const disk = store(); const queue = new Queue('synthetic-quarantine', disk.io); const item = await pending(queue);
+  disk.put(JSON.stringify({ ...item, state, reason: state === 'REJECTED' ? 'VALIDATION_REVIEW' : 'CONFLICT_CHECK_HISTORY' }));
+  const failure = server(item.body, path => {
+    if ((stage === 'identity' && path === '/auth/me') || (stage === 'status' && path.endsWith('/status')) || (stage === 'history' && path.includes('?submission_id='))) throw new ApiError(status,'Synthetic read failure',60000);
+  });
+  const failed = await queue.synchronize(failure.api, owner, () => true, true);
+  expect(failed?.state).toBe(state); expect(failed?.body).toEqual(item.body); expect(failed?.receipt).toBeUndefined();
+  expect(failed?.reason).toBe(status === 401 || status === 403 ? 'AUTH_REQUIRED' : 'RECONCILIATION_READ_FAILED');
+  expect(failure.posts()).toHaveLength(0);
+  jest.setSystemTime(NOW + 3600000);
+  const restarted = new Queue(queue.namespace, disk.io); const recovered = server(item.body);
+  await restarted.synchronize(recovered.api, owner, () => true);
+  expect(recovered.calls).toHaveLength(0); // Not even an automatic reconciliation read.
+  expect((await restarted.synchronize(recovered.api, owner, () => true, true))?.state).toBe(state);
+  expect(recovered.posts()).toHaveLength(0); expect((await restarted.read())?.body).toEqual(item.body);
+  const exact = server(item.body, path => path.includes('?submission_id=') ? { data: [receipt(item.body)], meta: { total: 1 } } : undefined);
+  expect((await restarted.synchronize(exact.api, owner, () => true, true))?.state).toBe('SYNCED');
+  expect(exact.posts()).toHaveLength(0);
+});
+test.each(['REJECTED','RECONCILIATION_REQUIRED'] as const)('%s cannot accept a mismatched reconciliation receipt', async state => {
+  const disk = store(); const queue = new Queue('synthetic-quarantine-mismatch', disk.io); const item = await pending(queue);
+  disk.put(JSON.stringify({ ...item, state }));
+  const http = server(item.body, path => path.includes('?submission_id=') ? { data: [{ ...receipt(item.body), vas_mm: 99 }] } : undefined);
+  expect((await queue.synchronize(http.api, owner, () => true, true))?.state).toBe('RECONCILIATION_REQUIRED');
+  expect(http.posts()).toHaveLength(0); expect((await queue.read())?.body).toEqual(item.body);
+});
+test.each(['PENDING_SYNC','SYNCING','REJECTED','RECONCILIATION_REQUIRED','SYNCED'] as const)('DRAFT-only disposal cannot erase %s even through a stale confirmation', async state => {
+  const disk = store(); const queue = new Queue('synthetic-draft-race', disk.io); const item = await pending(queue);
+  disk.put(JSON.stringify({ ...item, state, ...(state === 'SYNCED' ? { receipt: receipt(item.body) } : {}) }));
+  const before = disk.get();
+  await expect(queue.discardDraft(true,item.body.submission_id)).rejects.toThrow();
+  expect(disk.get()).toBe(before); expect(disk.io.remove).not.toHaveBeenCalled();
+});
+test('DRAFT disposal requires confirmation and exact UUID; a new-day draft gets fresh server identity without mutating the old body', async () => {
+  const disk = store(); const queue = new Queue('synthetic-obsolete-draft', disk.io);
+  const old = await queue.initialize(snapshot,NOW);
+  await expect(queue.discardDraft(false,old.body.submission_id)).rejects.toThrow();
+  await expect(queue.discardDraft(true,'44444444-4444-4444-8444-444444444444')).rejects.toThrow();
+  expect((await queue.read())?.body).toEqual(old.body);
+  await queue.discardDraft(true,old.body.submission_id); expect(await queue.read()).toBeNull();
+  const next = await queue.initialize({ ...snapshot, date_wib: '2026-11-09', submission_id: '44444444-4444-4444-8444-444444444444' },NOW+86400000);
+  expect(next.body.date_wib).toBe('2026-11-09'); expect(next.body.submission_id).not.toBe(old.body.submission_id);
+  expect(next.body.vas_mm).toBeNull(); expect(old.body.date_wib).toBe('2026-11-08');
+});

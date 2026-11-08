@@ -111,10 +111,23 @@ export class Queue {
   discard(confirmed: boolean): Promise<void> {
     return exclusive(this.namespace, async () => { check(confirmed, 'Pembuangan memerlukan konfirmasi.'); await this.io.remove(); check(await this.io.read() === null, 'Penghapusan aman belum terkonfirmasi.'); });
   }
+  discardDraft(confirmed: boolean, submissionId: string): Promise<void> {
+    return exclusive(this.namespace, async () => {
+      check(confirmed, 'Pembuangan draf memerlukan konfirmasi.');
+      const record = await this.readUnsafe();
+      check(record?.state === 'DRAFT' && record.body.submission_id === submissionId,
+        'Draf berubah atau mungkin telah dikirim. Periksa rekonsiliasi; data tidak dibuang.');
+      await this.io.remove();
+      check(await this.io.read() === null, 'Penghapusan draf belum terkonfirmasi.');
+    });
+  }
   async synchronize(api: Api, owner: { id: string; revision: string }, current: () => boolean, manual = false, now = Date.now()): Promise<Record | null> {
     return exclusive(this.namespace, async () => {
       let record = await this.readUnsafe();
-      if (!record || ['DRAFT','SYNCED'].includes(record.state) || (record.state === 'REJECTED' && !manual)) return record;
+      if (!record || ['DRAFT','SYNCED'].includes(record.state)) return record;
+      const quarantine = ['REJECTED','RECONCILIATION_REQUIRED'].includes(record.state) ? record.state : null;
+      // Quarantine is read-only even after a failed manual GET, restart or re-login.
+      if (quarantine && !manual) return record;
       if (!current()) throw new ScopeChanged();
       if (record.nextAttemptAt > now || (!manual && (record.attempts >= 5 || record.state === 'RECONCILIATION_REQUIRED'))) return record;
       const guard = () => { if (!current()) throw new ScopeChanged(); };
@@ -142,13 +155,13 @@ export class Queue {
         if (error instanceof ScopeChanged || !current()) throw new ScopeChanged();
         // Preserve an uncertain SYNCING marker on storage failure; never send around a failed write.
         const status = error instanceof ApiError ? error.status : -1;
-        if (status === 409) return retain('RECONCILIATION_REQUIRED', 'CONFLICT_CHECK_HISTORY');
-        if (status === 422) return retain('REJECTED', 'VALIDATION_REVIEW');
-        if (status === 401 || status === 403) return retain('PENDING_SYNC', 'AUTH_REQUIRED');
+        if (status === 409) return retain(quarantine ?? 'RECONCILIATION_REQUIRED', 'CONFLICT_CHECK_HISTORY');
+        if (status === 422) return retain(quarantine ?? 'REJECTED', 'VALIDATION_REVIEW');
+        if (status === 401 || status === 403) return retain(quarantine ?? 'PENDING_SYNC', 'AUTH_REQUIRED');
         if (status === 0 || status === 429 || status >= 500) {
           const attempts = Math.max(1, record.attempts + (record.state === 'SYNCING' ? 0 : 1));
           const delay = Math.max(Math.min(300000, 2000 * 2 ** Math.min(attempts, 8)), error instanceof ApiError ? error.retryAfterMs : 0);
-          return this.save({ ...record, state: 'PENDING_SYNC', attempts, nextAttemptAt: Math.max(now, Date.now()) + delay, reason: 'DELIVERY_UNCERTAIN' });
+          return this.save({ ...record, state: quarantine ?? 'PENDING_SYNC', attempts, nextAttemptAt: Math.max(now, Date.now()) + delay, reason: quarantine ? 'RECONCILIATION_READ_FAILED' : 'DELIVERY_UNCERTAIN' });
         }
         throw new Error('Antrean terkunci: penyimpanan atau identitas belum terverifikasi. Data tidak dihapus.');
       }

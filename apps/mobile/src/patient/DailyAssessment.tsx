@@ -76,6 +76,21 @@ function DailyForm() {
     if (durable?.enabled) void durable.update({ vas_mm: next.value, filled_by: next.filledBy,
       answers: Object.entries(next.answers).map(([code, option_id]) => ({ code, option_id })) });
   }
+  function discardDraft() {
+    const saved = durable?.record;
+    if (!saved || saved.state !== 'DRAFT' || durable.writing || durable.syncing || busyRef.current) return;
+    const id = saved.body.submission_id;
+    Alert.alert('Buang draf yang belum dikirim?', `Draf tanggal ${saved.body.date_wib} WIB belum diantrekan. Membuangnya menghilangkan jawaban lokal yang belum dikirim dan tidak dapat dipulihkan. Setelah pembuangan terverifikasi, aplikasi memeriksa tanggal, instrumen, dan kelayakan terbaru dari server.`, [
+      { text: 'Batal', style: 'cancel' }, { text: 'Buang draf', style: 'destructive', onPress: () => {
+        void durable.discardDraft(id).then(removed => {
+          if (!removed || !mounted.current) return;
+          form.current = { value: null, filledBy: null, answers: {} };
+          pending.current = null; setSuccess(null); setAttempt(false); setValue(null); setAnswers({}); setFilledBy(null);
+          setState(null); setStep('vas'); setError(''); setLoading(true); setRevision(r => r + 1);
+        });
+      } },
+    ]);
+  }
   function discard() {
     Alert.alert('Buang isian lokal?', 'Isian yang belum tersinkron tidak dapat dipulihkan. Ini tidak membatalkan permintaan yang mungkin sudah tersimpan di server. Periksa riwayat terlebih dahulu.', [
       { text: 'Batal', style: 'cancel' }, { text: 'Buang lokal', style: 'destructive', onPress: () => {
@@ -129,6 +144,11 @@ function DailyForm() {
         {!!durable?.lockedPredecessors && <Notice>Ada salinan lokal dari kredensial sebelumnya yang tetap terkunci. Periksa riwayat server dan kebijakan pemulihan bersama tim penelitian. Tidak ada isian lama yang dihapus otomatis.</Notice>}
         {durable && !durable.available && <Notice>Server atau kredensial ini belum mendukung antrean terenkripsi. Gunakan hanya saat online; isian belum tersimpan sampai ada tanda terima server.</Notice>}
         {durable?.enabled && <Notice>{durable.writing ? 'Menyimpan perubahan ke penyimpanan aman. Tunggu sebelum menutup aplikasi.' : !durable.record ? 'Penyimpanan terenkripsi siap. Belum ada draf lokal.' : durable.record.state === 'SYNCED' ? 'Tanda terima server diverifikasi.' : 'Draf/antrean disimpan terenkripsi pada perangkat. Belum tersimpan di server sampai ada tanda terima. Validitas versi dan tanggal diperiksa saat sinkronisasi.'}</Notice>}
+        {durable?.record?.state === 'DRAFT' && <Card>
+          <Copy>Draf belum dikirim · tanggal {durable.record.body.date_wib} WIB.</Copy>
+          <Copy>Jika tanggal telah berganti, buang draf dengan konfirmasi untuk memeriksa pengisian hari ini. Jawaban lokal yang belum dikirim akan hilang; tanggal dan identitas draf tidak diubah otomatis.</Copy>
+          <Button title="Buang draf belum dikirim…" secondary disabled={busy || durable.writing || durable.syncing} onPress={discardDraft} />
+        </Card>}
         {durable?.record && !['DRAFT','SYNCED'].includes(durable.record.state) && <Card>
           <Copy>{stateText[durable.record.state]}. {reasonText[durable.record.reason ?? ''] ?? ''}</Copy>
           <Copy>Permintaan lama tidak diubah. Isian terlambat/versi berubah perlu rekonsiliasi, bukan perubahan tanggal otomatis.</Copy>

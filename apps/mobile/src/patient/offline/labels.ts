@@ -10,6 +10,7 @@ export const reasonText: { [reason: string]: string } = {
   VERSION_DATE_OR_STATUS_CHANGED: 'Versi, tanggal, atau kelayakan berubah. Isian lama tetap disimpan.',
   CONFLICT_CHECK_HISTORY: 'Ada konflik. Periksa riwayat server sebelum melanjutkan.',
   VALIDATION_REVIEW: 'Jawaban perlu ditinjau. Isian yang sudah diantrekan tidak diubah otomatis.',
+  RECONCILIATION_READ_FAILED: 'Pemeriksaan server gagal. Isian tetap dikarantina; tidak ada pengiriman otomatis.',
   AUTH_REQUIRED: 'Masuk kembali untuk memvalidasi akses.',
   DELIVERY_UNCERTAIN: 'Layanan belum mengonfirmasi penyimpanan. Percobaan ulang memakai isian yang sama.',
 };

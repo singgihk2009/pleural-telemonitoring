@@ -74,6 +74,19 @@ export function OfflineProvider({ children }: PropsWithChildren) {
     scope, record, lockedPredecessors: queue?.lockedPredecessors ?? 0, error, syncing, writing: writing > 0,
     initialize: snapshot => change(store => store.initialize(snapshot)),
     update: body => change(store => store.update(body)), confirm: () => change(store => store.confirm()),
+    discardDraft: async submissionId => {
+      if (!queue || scopeRef.current !== scope) return false;
+      writers.current++; setWriting(writers.current);
+      try {
+        await queue.discardDraft(true, submissionId);
+        if (scopeRef.current !== scope) return false;
+        setLoaded({ scope, queue, record: null });
+        return true;
+      } catch {
+        if (scopeRef.current === scope) setLoaded(previous => ({ ...previous!, error: 'Pembuangan draf belum terkonfirmasi atau status berubah. Periksa rekonsiliasi; data tidak dianggap terhapus.' }));
+        return false;
+      } finally { writers.current--; setWriting(writers.current); }
+    },
     discard: async confirmed => {
       if (!queue || scopeRef.current !== scope) return;
       try { await queue.discard(confirmed); if (scopeRef.current === scope) setLoaded({ scope, queue, record: null }); }

@@ -309,3 +309,9 @@ captures the original token, foreground scope changes stop further sends, and an
 in-flight request may still commit. Logout hides RAM state immediately and preserves
 encrypted uncertain copies. No offline remote-revocation/secure-flash-erasure claim.
 See [queue security and rollback limits](../stage-b/offline-sync.md).
+
+Stage B1 instrument publication reuses researcher-only deny-first enrollment
+permission and fresh staff/token checks under serialization. Approval actor/time
+are server derived; settings/options/publication/audit are atomic and immutable.
+No new patient-data access or clinical grants are implied. See the
+[publication security/rollback notes](../stage-b/instrument-publication.md).
