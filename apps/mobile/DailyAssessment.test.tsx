@@ -129,3 +129,19 @@ test('history is patient scoped, paginated and contains only saved observations'
   await fireEvent.press(screen.getByRole('button', { name: 'Halaman berikutnya' }));
   await waitFor(() => expect(api).toHaveBeenCalledWith('/patient/assessments?page=2'));
 });
+
+test('published API-shaped instrument uses generated safe option IDs, separate unselected VAS and exact version in submission',async()=>{
+  const listener=jest.spyOn(AppState,'addEventListener').mockReturnValue({remove:jest.fn()})
+  const generated=4503599627370400
+  const published={...status,questionnaire:{version:'SYNTHETIC_PUBLISHED_V1',questions:[{code:'SYNTHETIC_PUBLISHED',label:'Item versi terbit sintetis',required:true,options:[{id:generated,label:'Pilihan terbit sintetis'}]}]}}
+  api.mockImplementation(async(path:string)=>path.includes('/status')?{data:published}:{data:{...receipt,version:published.questionnaire.version,answers:[{code:'SYNTHETIC_PUBLISHED',option_id:generated,value:'SYNTHETIC_A'}]},replayed:false})
+  const mounted=await mount();await screen.findByText('— — mm')
+  expect(screen.getByRole('button',{name:'Lanjut'})).toBeDisabled()
+  await fireEvent(screen.getByRole('adjustable'),'accessibilityAction',{nativeEvent:{actionName:'increment'}})
+  await fireEvent.press(screen.getByRole('button',{name:'Lanjut'}))
+  await fireEvent.press(screen.getByRole('button',{name:'Pilihan terbit sintetis'}));await fireEvent.press(screen.getByRole('button',{name:'Pasien'}))
+  await fireEvent.press(screen.getByRole('button',{name:'Periksa isian'}));await fireEvent.press(screen.getByRole('button',{name:'Kirim isian'}))
+  await screen.findByText('Isian berhasil tersimpan')
+  expect(api.mock.calls.find(call=>call[0]==='/patient/assessments')?.[1]).toMatchObject({version:'SYNTHETIC_PUBLISHED_V1',vas_mm:0,answers:[{code:'SYNTHETIC_PUBLISHED',option_id:generated}]})
+  await mounted.unmount();listener.mockRestore()
+})

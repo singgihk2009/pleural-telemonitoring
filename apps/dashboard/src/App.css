@@ -1333,3 +1333,15 @@ tbody tr:hover {
 .pin-value { font-family: monospace; font-size: 1.5rem; letter-spacing: .15em; }
 .pin-confirm { display: block; }
 .android-access button { min-height: 44px; }
+
+.instrument-nav { margin: 12px 20px; padding: 12px; text-align: left; background: #fff; color: #28355b; border: 1px solid #bbc6db; border-radius: 8px; cursor: pointer; }
+.instrument-modal { width: min(1000px, 96vw); }
+.instrument-body { overflow-y: auto; padding: 24px; }
+.instrument-body label { display: grid; gap: 6px; margin-block: 14px; }
+.instrument-body textarea, .instrument-body input:not([type=checkbox]) { width: 100%; padding: 10px; border: 1px solid #8a95ac; border-radius: 6px; }
+.instrument-body input[type=checkbox] { width: 20px; height: 20px; }
+.instrument-body fieldset { border: 1px solid #ccd3e0; padding: 16px; }
+.instrument-body pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f3f5f9; padding: 12px; }
+.instrument-body button { min-height: 44px; margin: 6px; }
+
+.instrument-modal .modal-head button { min-height: 44px; margin-left: 8px; }
