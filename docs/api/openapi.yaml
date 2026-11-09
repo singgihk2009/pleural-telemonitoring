@@ -1133,7 +1133,9 @@ paths:
       summary: Review immutable daily instrument versions and approval metadata
       description: Authorized non-assessor, non-IT researcher only. Twenty-five per page. Includes future/expired
         definitions for review; patient adapter still fails closed for invalid/expired current versions.
-        Legacy signed settings remain compatible. Does not publish or score.
+        Legacy signed settings remain compatible. Does not publish or score. Dashboard PR15 review
+        citations are local metadata and must not be sent as publication request fields; archive
+        the reviewed mapping separately under the actual approval reference.
       security: *id001
       parameters:
       - name: page
@@ -1144,7 +1146,11 @@ paths:
       responses:
         '200':
           description: Current version plus paginated immutable versions, raw definitions, approver/time,
-            approval reference, expiry and current_page/last_page.
+            approval reference, expiry and current_page/last_page. Future/expired versions are not necessarily active.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentPublicationIndex'
         '401': &id005
           $ref: '#/components/responses/Unauthorized'
         '403': &id006
@@ -2292,6 +2298,52 @@ components:
                 type:
                   type: [string, 'null']
                   enum: [HARIAN, ULANG, null]
+    InstrumentPublicationIndex:
+      type: object
+      additionalProperties: false
+      required: [current_version, data, meta]
+      properties:
+        current_version:
+          type: [string, 'null']
+          description: Applicable version from DailyInstrument; null can mean absent, invalid, future or expired. Not approval of any draft.
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublishedDailyInstrument'
+        meta:
+          type: object
+          additionalProperties: false
+          required: [current_page, last_page]
+          properties:
+            current_page:
+              type: integer
+              minimum: 1
+            last_page:
+              type: integer
+              minimum: 1
+    PublishedDailyInstrument:
+      type: object
+      additionalProperties: false
+      required: [version, approved_by, approved_at, effective_at, approval_reference, expires_at, definition]
+      properties:
+        version:
+          type: string
+        approved_by:
+          type: [string, 'null']
+          format: uuid
+        approved_at:
+          type: [string, 'null']
+          format: date-time
+        effective_at:
+          type: [string, 'null']
+          format: date-time
+        approval_reference:
+          type: [string, 'null']
+        expires_at:
+          type: [string, 'null']
+          format: date-time
+        definition:
+          description: Immutable raw JSON, including potentially invalid or legacy definitions. Review only; never automatically republish it. Options contain generated IDs/labels; the approved value mapping must be archived with the approval record.
     PublicationQuestion:
       description: An explicitly approved question definition with allowed choices, not an illustrative clinical catalog.
       type: object

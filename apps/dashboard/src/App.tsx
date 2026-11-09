@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ApiError, errorMessage, request } from './api'
 import type { Group, Participant, Results, Session, Status } from './api'
+import { InstrumentReview } from './InstrumentReview'
 import { EnrollmentForm } from './EnrollmentForm'
 import { Brand, Icon } from './icons'
 import './App.css'
@@ -155,6 +156,7 @@ function Workspace({
   const [page, setPage] = useState(1)
   const [reload, setReload] = useState(0)
   const [editor, setEditor] = useState<{ id: string | null } | null>(null)
+  const [instrumentOpen, setInstrumentOpen] = useState(false)
   const [toast, setToast] = useState('')
   const [leaving, setLeaving] = useState(false)
   const queryKey = JSON.stringify([session.token, search, group, status, page, reload])
@@ -246,7 +248,7 @@ function Workspace({
   }
   return (
     <>
-      <div className="app-shell" inert={editor !== null}>
+      <div className="app-shell" inert={editor !== null || instrumentOpen}>
         <aside className="sidebar">
           <Brand />
           <span className="nav-caption">RUANG PENELITIAN</span>
@@ -255,6 +257,7 @@ function Workspace({
             <span>Partisipan</span>
             <Icon name="arrow" size={15} />
           </div>
+          <button type="button" className="instrument-nav" onClick={()=>setInstrumentOpen(true)}>Review instrumen harian</button>
           <div className="study-info">
             <Icon name="book" />
             <div>
@@ -540,6 +543,7 @@ function Workspace({
           </main>
         </div>
       </div>
+      {instrumentOpen && <InstrumentReview session={session} onExpired={onExpired} onClose={()=>setInstrumentOpen(false)} onLogout={onLogout}/> }
       {editor && (
         <EnrollmentForm
           session={session}

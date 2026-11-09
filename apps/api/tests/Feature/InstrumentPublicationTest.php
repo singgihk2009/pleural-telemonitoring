@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Assessment\DailyInstrument;
 use App\Auth\SecurityAudit;
 use App\Models\AuditLog;
+use App\Models\Participant;
 use App\Models\PatientCredential;
 use App\Models\ResearchRole;
 use App\Models\ResearchSetting;
@@ -12,6 +13,7 @@ use App\Models\StaffUser;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -143,5 +145,50 @@ class InstrumentPublicationTest extends TestCase
         $this->callApi($staff, 'POST', $body)->assertStatus(503);
         $this->assertDatabaseCount('pengaturan', 1);
         $this->assertDatabaseCount('instrument_publications', 1);
+    }
+
+    public function test_dashboard_publication_contract_activates_only_when_effective_and_retains_assessment_provenance(): void
+    {
+        $staff = $this->staff();
+        $definition = $this->definition();
+        $this->callApi($staff, 'POST', $definition)->assertCreated();
+        $this->callApi($staff, 'GET', path: '/research/daily-instruments')->assertOk()
+            ->assertJsonPath('current_version', null)->assertJsonPath('data.0.definition.schedule.timezone', 'Asia/Jakarta')
+            ->assertJsonPath('data.0.approval_reference', 'SYNTHETIC_TEST_ONLY');
+        $patient = PatientCredential::factory()->create(['responden_id' => Participant::factory()->create([
+            'tanggal_pulang' => now('Asia/Jakarta')->subDay()->toDateString(),
+        ])->id]);
+        $this->callApi($patient, 'GET', path: '/patient/assessments/status')->assertOk()->assertJsonPath('data.available', false);
+        $this->travel(61)->seconds();
+        $status = $this->callApi($patient, 'GET', path: '/patient/assessments/status')->assertOk()
+            ->assertJsonPath('data.available', true)->assertJsonPath('data.can_submit', true)->json('data');
+        $body = ['submission_id' => $status['submission_id'], 'version' => $status['questionnaire']['version'],
+            'date_wib' => $status['date_wib'], 'vas_mm' => 100, 'filled_by' => 'PASIEN',
+            'device_created_at' => now()->utc()->format('Y-m-d\TH:i:s.v\Z'),
+            'answers' => [['code' => 'SYNTHETIC_ITEM', 'option_id' => $status['questionnaire']['questions'][0]['options'][0]['id']]]];
+        $this->callApi($patient, 'POST', $body, '/patient/assessments')->assertCreated()->assertJsonPath('data.version', $definition['version']);
+        $this->callApi($staff, 'GET', path: '/participants/'.$patient->responden_id.'/assessments?type=HARIAN')
+            ->assertOk()->assertJsonPath('data.0.version', $definition['version'])
+            ->assertJsonPath('data.0.answers.0.question_label', $definition['questions'][0]['label']);
+        $this->travel(60)->seconds();
+        $this->callApi($patient, 'GET', path: '/patient/assessments/status')->assertOk()->assertJsonPath('data.available', false);
+        $this->callApi($patient, 'POST', $body, '/patient/assessments')->assertOk()->assertJsonPath('replayed', true);
+        $this->callApi($patient, 'POST', array_replace($body, ['submission_id' => (string) Str::uuid()]), '/patient/assessments')->assertConflict();
+        $this->assertDatabaseCount('entri_harian', 1);
+        $this->assertSame(1, AuditLog::where('aksi', 'instrument.published')->count());
+        $this->assertSame(1, AuditLog::where('aksi', 'assessment.submitted')->count());
+        foreach (['klasifikasi', 'peringatan', 'notification_deliveries'] as $table) {
+            $this->assertDatabaseCount($table, 0);
+        }
+    }
+
+    public function test_review_of_empty_configuration_never_creates_or_activates_a_default_instrument(): void
+    {
+        $this->callApi($this->staff(), 'GET', path: '/research/daily-instruments')->assertOk()
+            ->assertJsonPath('current_version', null)->assertJsonPath('data', []);
+        foreach (['pengaturan', 'symptom_options', 'instrument_publications'] as $table) {
+            $this->assertDatabaseCount($table, 0);
+        }
+        $this->assertSame(0, AuditLog::where('aksi', 'instrument.published')->count());
     }
 }
