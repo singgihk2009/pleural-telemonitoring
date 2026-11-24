@@ -1,0 +1,193 @@
+{
+  "definition": {
+    "version": null,
+    "schedule": {
+      "timezone": "Asia/Jakarta",
+      "first_day": 1,
+      "last_day": 30,
+      "late_policy": null
+    },
+    "questions": [
+      {
+        "code": "Q1",
+        "label": "Sesak saat istirahat",
+        "required": null,
+        "options": [
+          {
+            "value": "TIDAK",
+            "label": "Tidak"
+          },
+          {
+            "value": "YA",
+            "label": "Ya"
+          }
+        ]
+      },
+      {
+        "code": "Q2",
+        "label": "Nyeri dada",
+        "required": null,
+        "options": []
+      },
+      {
+        "code": "Q3",
+        "label": "Bibir/ujung jari kebiruan",
+        "required": null,
+        "options": [
+          {
+            "value": "TIDAK",
+            "label": "Tidak"
+          },
+          {
+            "value": "YA",
+            "label": "Ya"
+          }
+        ]
+      },
+      {
+        "code": "Q4",
+        "label": "Penurunan kesadaran, bingung (keluarga)",
+        "required": null,
+        "options": [
+          {
+            "value": "TIDAK",
+            "label": "Tidak"
+          },
+          {
+            "value": "YA",
+            "label": "Ya"
+          }
+        ]
+      },
+      {
+        "code": "Q5",
+        "label": "Batuk darah",
+        "required": null,
+        "options": [
+          {
+            "value": "TIDAK",
+            "label": "Tidak"
+          },
+          {
+            "value": "YA",
+            "label": "Ya"
+          }
+        ]
+      },
+      {
+        "code": "Q6",
+        "label": "Demam",
+        "required": null,
+        "options": [
+          {
+            "value": "TIDAK",
+            "label": "Tidak"
+          },
+          {
+            "value": "YA",
+            "label": "Ya"
+          }
+        ]
+      },
+      {
+        "code": "Q7",
+        "label": "Batuk bertambah",
+        "required": null,
+        "options": [
+          {
+            "value": "TIDAK",
+            "label": "Tidak"
+          },
+          {
+            "value": "YA",
+            "label": "Ya"
+          }
+        ]
+      },
+      {
+        "code": "Q8",
+        "label": "Bekas tusukan nyeri/rembes/bengkak",
+        "required": null,
+        "options": [
+          {
+            "value": "TIDAK",
+            "label": "Tidak"
+          },
+          {
+            "value": "YA",
+            "label": "Ya"
+          }
+        ]
+      }
+    ]
+  },
+  "evidence": {
+    "instrument": "BELUM SIAP DIPUBLIKASIKAN. Panduan Visual G hlm6 dan Panduan Sederhana H (21 Okt 2026) hlm3 §4. Proposal asli belum tersedia; tidak ada versi instrumen final. Q1–Q8 hanya ID teknis usulan sesuai urutan G, bukan kode yang disetujui. Lihat traceability.md dan decisions.md PR16.",
+    "vas": "G hlm5 F3; H hlm3 §5: integer 0–100 mm, tanpa nilai awal, terpisah dari questions. Tidak menyertakan delta/warna/klasifikasi.",
+    "schedule": "H hlm2 §3, hlm7 §9; G hlm3/5: hari0 tanggal pulang, hari1–30 WIB. late_policy null: panduan mendukung offline tetapi tidak menetapkan nasib kiriman lintas tanggal; existing API hanya same_day_only. Belum ada persetujuan final kalender aktivasi/expiry.",
+    "validation": "C main ad90358 PR11–15: VAS required integer, filled_by global PASIEN/KELUARGA, UUID/provenance immutable, satu HARIAN/hari. Ini kontrak teknis, bukan keputusan required klinis. Semua required null; jangan menggantinya dengan false agar valid.",
+    "questions": {
+      "Q1": {
+        "definition": "G hlm6 F3 baris1; H hlm3 §4 daftar data harian item2. Label kandidat disalin dari G; Q1 adalah ID teknis USULAN berdasarkan urutan, belum disetujui sebagai kode instrumen.",
+        "required": "BELUM DIPUTUSKAN: G/H/S tidak menetapkan wajib/opsional per pertanyaan. null bukan jawaban Tidak atau status opsional.",
+        "options": {
+          "TIDAK": "G hlm6 F3 baris1, label Tidak. TIDAK merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik.",
+          "YA": "G hlm6 F3 baris1, label Ya. YA merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik."
+        }
+      },
+      "Q2": {
+        "definition": "G hlm6 F3 baris2; H hlm3 §4 daftar data harian item3. Label kandidat disalin dari G; Q2 adalah ID teknis USULAN berdasarkan urutan, belum disetujui sebagai kode instrumen. KONFLIK: gambar Ringan/Hebat versus catatan Tidak/Ringan-sedang/Hebat (usulan); H hanya nama gejala. options kosong agar tidak memilih salah satu.",
+        "required": "BELUM DIPUTUSKAN: G/H/S tidak menetapkan wajib/opsional per pertanyaan. null bukan jawaban Tidak atau status opsional.",
+        "options": {}
+      },
+      "Q3": {
+        "definition": "G hlm6 F3 baris3; H hlm3 §4 daftar data harian item4. Label kandidat disalin dari G; Q3 adalah ID teknis USULAN berdasarkan urutan, belum disetujui sebagai kode instrumen.",
+        "required": "BELUM DIPUTUSKAN: G/H/S tidak menetapkan wajib/opsional per pertanyaan. null bukan jawaban Tidak atau status opsional.",
+        "options": {
+          "TIDAK": "G hlm6 F3 baris3, label Tidak. TIDAK merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik.",
+          "YA": "G hlm6 F3 baris3, label Ya. YA merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik."
+        }
+      },
+      "Q4": {
+        "definition": "G hlm6 F3 baris4; H hlm3 §4 daftar data harian item5. Label kandidat disalin dari G; Q4 adalah ID teknis USULAN berdasarkan urutan, belum disetujui sebagai kode instrumen. Syarat keluarga tetap tercatat; kontrak pengisi hanya global, bukan kondisi per item. Belum disederhanakan menjadi item semua pengisi.",
+        "required": "BELUM DIPUTUSKAN: G/H/S tidak menetapkan wajib/opsional per pertanyaan. null bukan jawaban Tidak atau status opsional.",
+        "options": {
+          "TIDAK": "G hlm6 F3 baris4, label Tidak. TIDAK merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik.",
+          "YA": "G hlm6 F3 baris4, label Ya. YA merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik."
+        }
+      },
+      "Q5": {
+        "definition": "G hlm6 F3 baris5; H hlm3 §4 daftar data harian item6. Label kandidat disalin dari G; Q5 adalah ID teknis USULAN berdasarkan urutan, belum disetujui sebagai kode instrumen.",
+        "required": "BELUM DIPUTUSKAN: G/H/S tidak menetapkan wajib/opsional per pertanyaan. null bukan jawaban Tidak atau status opsional.",
+        "options": {
+          "TIDAK": "G hlm6 F3 baris5, label Tidak. TIDAK merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik.",
+          "YA": "G hlm6 F3 baris5, label Ya. YA merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik."
+        }
+      },
+      "Q6": {
+        "definition": "G hlm6 F3 baris6; H hlm3 §4 daftar data harian item7. Label kandidat disalin dari G; Q6 adalah ID teknis USULAN berdasarkan urutan, belum disetujui sebagai kode instrumen.",
+        "required": "BELUM DIPUTUSKAN: G/H/S tidak menetapkan wajib/opsional per pertanyaan. null bukan jawaban Tidak atau status opsional.",
+        "options": {
+          "TIDAK": "G hlm6 F3 baris6, label Tidak. TIDAK merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik.",
+          "YA": "G hlm6 F3 baris6, label Ya. YA merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik."
+        }
+      },
+      "Q7": {
+        "definition": "G hlm6 F3 baris7; H hlm3 §4 daftar data harian item8. Label kandidat disalin dari G; Q7 adalah ID teknis USULAN berdasarkan urutan, belum disetujui sebagai kode instrumen.",
+        "required": "BELUM DIPUTUSKAN: G/H/S tidak menetapkan wajib/opsional per pertanyaan. null bukan jawaban Tidak atau status opsional.",
+        "options": {
+          "TIDAK": "G hlm6 F3 baris7, label Tidak. TIDAK merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik.",
+          "YA": "G hlm6 F3 baris7, label Ya. YA merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik."
+        }
+      },
+      "Q8": {
+        "definition": "G hlm6 F3 baris8; H hlm3 §4 daftar data harian item9. Label kandidat disalin dari G; Q8 adalah ID teknis USULAN berdasarkan urutan, belum disetujui sebagai kode instrumen.",
+        "required": "BELUM DIPUTUSKAN: G/H/S tidak menetapkan wajib/opsional per pertanyaan. null bukan jawaban Tidak atau status opsional.",
+        "options": {
+          "TIDAK": "G hlm6 F3 baris8, label Tidak. TIDAK merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik.",
+          "YA": "G hlm6 F3 baris8, label Ya. YA merupakan transkripsi kode mesin USULAN dari label, belum persetujuan mapping/semantik."
+        }
+      }
+    }
+  }
+}
