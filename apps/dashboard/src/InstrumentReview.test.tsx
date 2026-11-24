@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
+import {readFileSync} from 'node:fs'
+import {URL as NodeURL} from 'node:url'
 import {render,screen,fireEvent,waitFor,cleanup} from '@testing-library/react'
 import {vi,beforeEach,afterEach,test,expect} from 'vitest'
 import {InstrumentReview} from './InstrumentReview'
 import {ApiError,request} from './api'
+import {syntheticUatReference} from './instrument'
 import {packet,future} from './test/instrumentFixture'
 vi.mock('./api',async()=>({...await vi.importActual('./api'),request:vi.fn()}))
 const session={token:'SYNTHETIC',expiresAt:'2099-01-01T00:00:00Z'}
@@ -10,10 +13,10 @@ const expired=vi.fn(),close=vi.fn(),logout=vi.fn(async()=>{})
 const index={current_version:null,data:[],meta:{current_page:1,last_page:1}}
 const posts=()=>vi.mocked(request).mock.calls.filter(c=>c[2]==='POST')
 const mount=()=>render(<InstrumentReview session={session} onExpired={expired} onClose={close} onLogout={logout}/> )
-async function ready(){
+async function ready(raw=JSON.stringify(packet()),reference='SYNTHETIC_APPROVAL'){
  await screen.findByLabelText('Paket review JSON')
- fireEvent.change(screen.getByLabelText('Paket review JSON'),{target:{value:JSON.stringify(packet())}})
- fireEvent.change(screen.getByLabelText('Referensi persetujuan versi ini'),{target:{value:'SYNTHETIC_APPROVAL'}})
+ fireEvent.change(screen.getByLabelText('Paket review JSON'),{target:{value:raw}})
+ fireEvent.change(screen.getByLabelText('Referensi persetujuan versi ini'),{target:{value:reference}})
  fireEvent.change(screen.getByLabelText('Waktu berlaku (WIB)'),{target:{value:future(1)}})
  fireEvent.change(screen.getByLabelText('Kedaluwarsa (WIB)'),{target:{value:future(2)}})
  fireEvent.click(screen.getByRole('button',{name:'Tinjau kesiapan publikasi'}))
@@ -34,6 +37,18 @@ test('complete review still requires explicit confirmation; one guarded POST use
  await screen.findByRole('heading',{name:'Tanda terima publikasi server'})
  expect(posts()).toHaveLength(1);expect(posts()[0][3]).toMatchObject({expected_current_version:null,confirm_publication:true,approval_reference:'SYNTHETIC_APPROVAL'})
  expect(posts()[0][3]).not.toHaveProperty('evidence')
+})
+test('synthetic UAT review requests explicit technical confirmation and labels its receipt',async()=>{
+ const fixture=readFileSync(new NodeURL('../../api/tests/Fixtures/synthetic-uat-daily.json',import.meta.url),'utf8')
+ mount();await ready(fixture,syntheticUatReference)
+ expect(posts()).toHaveLength(0)
+ expect(screen.getByText('SYNTHETIC-UAT · Pengujian teknis di lingkungan terisolasi')).toBeTruthy()
+ fireEvent.click(screen.getByRole('checkbox',{name:/mengonfirmasi publikasi teknis/}))
+ fireEvent.click(screen.getByRole('button',{name:'Publikasikan versi ini'}))
+ await screen.findByRole('heading',{name:'Tanda terima publikasi server'})
+ expect(screen.getByText(/Versi SYNTHETIC-UAT-DAILY-V1; peneliti .*; dicatat/)).toBeTruthy()
+ expect(posts()).toHaveLength(1)
+ expect(posts()[0][3]).toMatchObject({approval_reference:syntheticUatReference})
 })
 test.each([401,403])('server %s denies access before showing the editor or any definitions',async code=>{
  vi.mocked(request).mockRejectedValue(new ApiError(code));mount()

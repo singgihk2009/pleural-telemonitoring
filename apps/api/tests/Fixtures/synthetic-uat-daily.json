@@ -1,0 +1,55 @@
+{
+  "definition": {
+    "version": "SYNTHETIC-UAT-DAILY-V1",
+    "schedule": {
+      "timezone": "Asia/Jakarta",
+      "first_day": 1,
+      "last_day": 30,
+      "late_policy": "same_day_only"
+    },
+    "questions": [
+      {
+        "code": "SYNTHETIC_UAT_SHAPE",
+        "label": "SYNTHETIC-UAT · Pilih bentuk untuk uji aplikasi",
+        "required": true,
+        "options": [
+          { "value": "UAT_CIRCLE", "label": "Lingkaran (UAT)" },
+          { "value": "UAT_TRIANGLE", "label": "Segitiga (UAT)" }
+        ]
+      },
+      {
+        "code": "SYNTHETIC_UAT_LETTER",
+        "label": "SYNTHETIC-UAT · Pilih huruf untuk uji aplikasi",
+        "required": false,
+        "options": [
+          { "value": "UAT_A", "label": "Huruf A (UAT)" },
+          { "value": "UAT_B", "label": "Huruf B (UAT)" }
+        ]
+      }
+    ]
+  },
+  "evidence": {
+    "instrument": "PR-17, docs/uat/PR-17.md, Paket dan batas UAT. Bentuk dan huruf dibuat khusus untuk pengujian fungsi.",
+    "vas": "PR-17, Skenario perangkat. Uji teknis kontrol VAS kosong dan batas bilangan bulat 0–100 mm.",
+    "schedule": "PR-17, Penyiapan akun dan peserta. Hari 1–30 WIB menguji kontrak aplikasi pada tanggal yang sama.",
+    "validation": "PR-17, Skenario perangkat. Uji status, konfirmasi, antrean, sinkronisasi, riwayat dan audit; tanpa interpretasi klinis.",
+    "questions": {
+      "SYNTHETIC_UAT_SHAPE": {
+        "definition": "PR-17, Skenario perangkat, item bentuk sintetis.",
+        "required": "Item bentuk wajib untuk menguji validasi jawaban yang belum diisi.",
+        "options": {
+          "UAT_CIRCLE": "Nilai teknis untuk opsi lingkaran.",
+          "UAT_TRIANGLE": "Nilai teknis untuk opsi segitiga."
+        }
+      },
+      "SYNTHETIC_UAT_LETTER": {
+        "definition": "PR-17, Skenario perangkat, item huruf sintetis.",
+        "required": "Item huruf opsional untuk menguji pengiriman dengan jawaban kosong.",
+        "options": {
+          "UAT_A": "Nilai teknis untuk opsi huruf A.",
+          "UAT_B": "Nilai teknis untuk opsi huruf B."
+        }
+      }
+    }
+  }
+}

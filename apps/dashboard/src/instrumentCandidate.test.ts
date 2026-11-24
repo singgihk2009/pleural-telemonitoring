@@ -3,7 +3,7 @@
 import {readFileSync} from 'node:fs'
 import {createHash} from 'node:crypto'
 import {test,expect} from 'vitest'
-import {parsePacket,InstrumentReviewError} from './instrument'
+import {parsePacket,publicationInput,syntheticUatReference,InstrumentReviewError} from './instrument'
 const root=new URL('../../../',import.meta.url)
 const read=(p:string)=>readFileSync(new URL(p,root),'utf8')
 const raw=read('docs/research/pr16/daily-assessment.candidate.DO-NOT-PUBLISH.json')
@@ -38,4 +38,14 @@ test('reviewed PDF copies match the documented source identities',()=>{
  const hash=(p:string)=>createHash('sha256').update(readFileSync(new URL(p,root))).digest('hex')
  expect(hash('docs/design/TeleNapas_Panduan_Sederhana_IT.pdf')).toBe('18e0ebb3c2cd3aec185f7dd94c65a0203d9f463397c6a85517e8deb6432bedb2')
  expect(hash('docs/design/TeleNapas_Panduan_Visual_IT.pdf')).toBe('0a564e84de7f45acf15d176de4db3167dda7d0f0047cd9d216219d3039516a1b')
+})
+
+test('the PR17 fixture passes dashboard review and requires the technical reference',()=>{
+ const packet=parsePacket(read('apps/api/tests/Fixtures/synthetic-uat-daily.json'))
+ const start='2099-01-01T08:00',end='2099-01-01T18:00'
+ const body=publicationInput(packet,syntheticUatReference,start,end,null,0)
+ expect(body.version).toBe('SYNTHETIC-UAT-DAILY-V1')
+ expect(body.approval_reference).toBe('SYNTHETIC-UAT-TECHNICAL-ONLY')
+ expect(body.questions.map(q=>q.required)).toEqual([true,false])
+ expect(()=>publicationInput(packet,'EXTERNAL_REFERENCE',start,end,null,0)).toThrow(InstrumentReviewError)
 })

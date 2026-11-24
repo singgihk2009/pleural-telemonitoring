@@ -56,6 +56,9 @@ class DailyInstrument
         if (! is_int($definition['schedule']['first_day']) || ! is_int($definition['schedule']['last_day'])) {
             return null;
         }
+        if (! SyntheticUatPublication::allows($setting->versi, $publication?->approval_reference, array_column($definition['questions'], 'code'))) {
+            return null;
+        }
         $catalog = SymptomOption::where('pengaturan_id', $setting->id)->get()->keyBy('id');
         foreach ($definition['questions'] as $question) {
             if (! is_bool($question['required'])) {

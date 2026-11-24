@@ -48,8 +48,13 @@ export function wibToUTC(value:string): string {
   if(!Number.isFinite(stamp)||new Date(stamp+7*3600000).toISOString().slice(0,16)!==value)throw new InstrumentReviewError('Waktu WIB tidak valid.')
   return new Date(stamp).toISOString()
 }
+export const syntheticUatReference = 'SYNTHETIC-UAT-TECHNICAL-ONLY'
+export const isSyntheticUatVersion = (version:string) => version.startsWith('SYNTHETIC-UAT-')
+
 export function publicationInput(p:Packet,reference:string,effective:string,expires:string,expected:string|null,now=Date.now()) {
   if(!/^[A-Za-z0-9_-]{1,80}$/.test(reference))throw new InstrumentReviewError('Isi referensi persetujuan nyata (1–80 huruf/angka/_/-); jangan membuat referensi pengganti.')
+  if(isSyntheticUatVersion(p.definition.version) !== (reference===syntheticUatReference))
+    throw new InstrumentReviewError('Paket SYNTHETIC-UAT wajib memakai referensi teknis SYNTHETIC-UAT-TECHNICAL-ONLY.')
   const start=wibToUTC(effective);const end=wibToUTC(expires)
   if(Date.parse(start)<=now||Date.parse(end)<=Date.parse(start))throw new InstrumentReviewError('Waktu berlaku harus di masa depan dan kedaluwarsa setelah waktu berlaku; server memeriksa kembali.')
   return {...p.definition,expected_current_version:expected,approval_reference:reference,effective_at:start,expires_at:end,confirm_publication:true as const}

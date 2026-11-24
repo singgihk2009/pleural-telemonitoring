@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Assessment\DailyInstrument;
+use App\Assessment\SyntheticUatPublication;
 use App\Auth\SecurityAudit;
 use App\Models\Participant;
 use App\Models\ResearchSetting;
@@ -67,6 +68,10 @@ class InstrumentPublicationController extends Controller
                 throw ValidationException::withMessages(['questions' => ['Use boolean required flags and distinct option values per question.']]);
             }
         }
+        if (! SyntheticUatPublication::allows($data['version'], $data['approval_reference'], array_column($data['questions'], 'code'))) {
+            throw ValidationException::withMessages(['version' => ['Publication is unavailable for this instrument in the current environment.']]);
+        }
+
         try {
             return DB::transaction(function () use ($request, $data, $adapter) {
                 DB::table('user_roles')->where('kode', 'PENELITI_UTAMA')->lockForUpdate()->firstOrFail();
