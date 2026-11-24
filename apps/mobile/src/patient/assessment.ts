@@ -5,7 +5,7 @@ export type Question = {
 export type Assessment = {
   id: string; date_wib: string; study_day: number; vas_mm: number;
   type: string; filled_by: string; received_at: string; device_created_at: string;
-  version: string | null; answers: { code: string; option_id: number; value: string }[];
+  version: string | null; answers: { code: string; option_id: number; value: string; question_label?: string | null; answer_label?: string | null }[];
 };
 export type AssessmentStatus = {
   available: boolean; can_submit: boolean; submission_id: string; date_wib: string; study_day: number;

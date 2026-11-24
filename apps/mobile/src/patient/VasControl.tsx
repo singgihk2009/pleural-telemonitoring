@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Card, Copy } from './ui';
+import { Button, Card, Copy } from './ui';
 import { styles, colors } from './theme';
 
 export function VasControl({
@@ -97,12 +97,17 @@ export function VasControl({
         <Copy>50</Copy>
         <Copy>100</Copy>
       </View>
+      {value !== null && <View style={local.adjust}>
+        <Button title="Kurangi 1 mm" secondary disabled={value===0} onPress={() => onChange(value-1)} />
+        <Button title="Tambah 1 mm" secondary disabled={value===100} onPress={() => onChange(value+1)} />
+      </View>}
       <Copy style={styles.muted}>Tanpa nilai awal. Pilih nilai sendiri sebelum melanjutkan.</Copy>
     </Card>
   );
 }
 
 const local = StyleSheet.create({
+  adjust: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   vasValue: { borderRadius: 16, padding: 24, backgroundColor: '#EDF4FC', alignItems: 'center' },
   vasNumber: { fontSize: 36, lineHeight: 48, fontWeight: '700', color: colors.navy },
 });

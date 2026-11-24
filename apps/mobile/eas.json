@@ -19,6 +19,13 @@
       "android": {
         "buildType": "apk"
       }
+    },
+    "synthetic-uat": {
+      "extends": "uat",
+      "env": {
+        "APP_VARIANT": "synthetic-uat",
+        "EXPO_PUBLIC_API_BASE_URL": "https://uat-telenapas.sintaraniapp.net/api/v1"
+      }
     }
   }
 }

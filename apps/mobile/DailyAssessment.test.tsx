@@ -26,8 +26,8 @@ async function confirm() {
   await fireEvent(screen.getByRole('adjustable'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
   await fireEvent.press(screen.getByRole('button', { name: 'Lanjut' }));
   expect(screen.getByRole('button', { name: 'Periksa isian' })).toBeDisabled();
-  await fireEvent.press(screen.getByRole('button', { name: 'Pilihan sintetis A' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Pasien' }));
+  await fireEvent.press(screen.getByRole('radio', { name: 'Pilihan sintetis A' }));
+  await fireEvent.press(screen.getByRole('radio', { name: 'Pasien' }));
   await fireEvent.press(screen.getByRole('button', { name: 'Periksa isian' }));
 }
 beforeEach(() => {
@@ -43,6 +43,31 @@ test('loads approved content, requires an explicit VAS and required answers, con
   await screen.findByText('Isian berhasil tersimpan');
   expect(api).toHaveBeenLastCalledWith('/patient/assessments', expect.objectContaining({ submission_id: status.submission_id, vas_mm: 0, version: 'SYNTHETIC-V1', answers: [{ code: 'SYNTHETIC_ITEM', option_id: 1 }] }));
   expect(screen.queryByText(/MERAH|KUNING|HIJAU/)).toBeNull();
+});
+
+test('adjusts VAS precisely and clears an optional answer before confirmation', async () => {
+  const optional = { code: 'OPTIONAL', label: 'Item opsional', required: false, options: [{ id: 2, label: 'Pilihan opsional' }] };
+  api.mockImplementation(async (path: string) => path.includes('/status')
+    ? { data: { ...status, questionnaire: { ...status.questionnaire, questions: [...status.questionnaire!.questions, optional] } } }
+    : { data: receipt, replayed: false });
+  await mount();
+  await screen.findByText('— — mm');
+  await fireEvent(screen.getByRole('adjustable'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+  await fireEvent.press(screen.getByRole('button', { name: 'Tambah 1 mm' }));
+  await screen.findByText('1 mm');
+  await fireEvent.press(screen.getByRole('button', { name: 'Lanjut' }));
+  await fireEvent.press(screen.getByRole('radio', { name: 'Pilihan sintetis A' }));
+  await fireEvent.press(screen.getByRole('radio', { name: 'Pilihan opsional' }));
+  expect(screen.getByRole('radio', { name: 'Pilihan opsional', checked: true })).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Kosongkan pilihan' }));
+  await fireEvent.press(screen.getByRole('radio', { name: 'Pasien' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Periksa isian' }));
+  await screen.findByText('Item opsional: Tidak diisi');
+  await fireEvent.press(screen.getByRole('button', { name: 'Kirim isian' }));
+  await screen.findByText('Isian berhasil tersimpan');
+  expect(api).toHaveBeenLastCalledWith('/patient/assessments', expect.objectContaining({
+    vas_mm: 1, answers: [{ code: 'SYNTHETIC_ITEM', option_id: 1 }],
+  }));
 });
 
 test('missing approved instrument shows unavailable with no wireframe answer submission', async () => {
@@ -123,8 +148,10 @@ test('background hides a pending form and foreground preserves the same operatio
 });
 
 test('history is patient scoped, paginated and contains only saved observations', async () => {
-  api.mockResolvedValue({ data: [receipt], meta: { last_page: 2 } });
+  const answers = [{ code: 'ITEM', option_id: 1, value: 'VALUE', question_label: 'Pertanyaan historis', answer_label: 'Jawaban historis' }];
+  api.mockResolvedValue({ data: [{ ...receipt, answers }], meta: { last_page: 2 } });
   await render(<PatientContext.Provider value={context()}><AssessmentHistory /></PatientContext.Provider>);
+  await screen.findByText('Pertanyaan historis: Jawaban historis');
   await screen.findByText('VAS 0 mm · PASIEN'); expect(api).toHaveBeenCalledWith('/patient/assessments?page=1');
   await fireEvent.press(screen.getByRole('button', { name: 'Halaman berikutnya' }));
   await waitFor(() => expect(api).toHaveBeenCalledWith('/patient/assessments?page=2'));
@@ -139,7 +166,7 @@ test('published API-shaped instrument uses generated safe option IDs, separate u
   expect(screen.getByRole('button',{name:'Lanjut'})).toBeDisabled()
   await fireEvent(screen.getByRole('adjustable'),'accessibilityAction',{nativeEvent:{actionName:'increment'}})
   await fireEvent.press(screen.getByRole('button',{name:'Lanjut'}))
-  await fireEvent.press(screen.getByRole('button',{name:'Pilihan terbit sintetis'}));await fireEvent.press(screen.getByRole('button',{name:'Pasien'}))
+  await fireEvent.press(screen.getByRole('radio',{name:'Pilihan terbit sintetis'}));await fireEvent.press(screen.getByRole('radio',{name:'Pasien'}))
   await fireEvent.press(screen.getByRole('button',{name:'Periksa isian'}));await fireEvent.press(screen.getByRole('button',{name:'Kirim isian'}))
   await screen.findByText('Isian berhasil tersimpan')
   expect(api.mock.calls.find(call=>call[0]==='/patient/assessments')?.[1]).toMatchObject({version:'SYNTHETIC_PUBLISHED_V1',vas_mm:0,answers:[{code:'SYNTHETIC_PUBLISHED',option_id:generated}]})

@@ -191,6 +191,10 @@ class DailyAssessmentTest extends TestCase
             ->assertJsonPath('meta.filters', ['from' => '2026-11-07', 'to' => '2026-11-07', 'type' => 'HARIAN'])
             ->assertJsonPath('data.0.answers.0.question_label', $setting->nilai_json['questions'][0]['label'])
             ->assertJsonPath('data.0.answers.0.answer_label', $setting->nilai_json['questions'][0]['options'][0]['label']);
+        $this->api($this->token($patient), 'GET', '/patient/assessments?submission_id='.$body['submission_id'])
+            ->assertOk()->assertJsonPath('data.0.answers.0.question_label', $setting->nilai_json['questions'][0]['label'])
+            ->assertJsonPath('data.0.answers.0.answer_label', $setting->nilai_json['questions'][0]['options'][0]['label'])
+            ->assertJsonMissingPath('meta.filters');
         $response->assertDontSee('pin_hash')->assertDontSee('submission_fingerprint')->assertDontSee('kontak');
         $this->api($token, 'GET', $path.'?type=ULANG')->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.version', null)
             ->assertJsonPath('data.0.answers.0.question_label', null)->assertJsonPath('data.0.answers.0.answer_label', null);

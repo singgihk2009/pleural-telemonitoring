@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react'
 import {ApiError,request,type Session} from './api'
-import {parsePacket,publicationInput,InstrumentReviewError,isSyntheticUatVersion,type Packet} from './instrument'
+import {parsePacket,publicationInput,InstrumentReviewError,isSyntheticUatVersion,draftFromPacket,emptyInstrument,serializeDraft,type Packet} from './instrument'
+import {InstrumentFields,PatientPreview} from './InstrumentFields'
 
 type Published = {version:string;approved_by:string|null;approved_at:string|null;effective_at:string|null;expires_at:string|null;approval_reference:string|null;definition:unknown}
 type Index = {current_version:string|null;data:Published[];meta:{current_page:number;last_page:number}}
@@ -8,6 +9,9 @@ const stamp=(v:string|null)=>v?`${new Date(v).toLocaleString('id-ID',{timeZone:'
 export function InstrumentReview({session,onExpired,onClose,onLogout}:{session:Session;onExpired():void;onClose():void;onLogout():Promise<void>}) {
   const [index,setIndex]=useState<Index|null>(null);const [page,setPage]=useState(1);const [retry,setRetry]=useState(0)
   const [error,setError]=useState('');const [denied,setDenied]=useState(false);const [busy,setBusy]=useState(false)
+  const [draft,setDraft]=useState(emptyInstrument)
+  const sequence=useRef(0)
+  const nextId=()=>++sequence.current
   const [raw,setRaw]=useState('');const [reference,setReference]=useState('');const [effective,setEffective]=useState('');const [expires,setExpires]=useState('')
   const [review,setReview]=useState<{packet:Packet;expected:string|null}|null>(null);const [confirmed,setConfirmed]=useState(false)
   const [uncertain,setUncertain]=useState(false);const [receipt,setReceipt]=useState<Published|null>(null);const [notice,setNotice]=useState('')
@@ -17,9 +21,11 @@ export function InstrumentReview({session,onExpired,onClose,onLogout}:{session:S
     const previous=document.activeElement;const node=dialog.current;node?.focus()
     function trap(event:KeyboardEvent){
       if(event.key!=='Tab')return
-      const controls=node?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),summary')
+      const controls=node?.querySelectorAll<HTMLElement>('button:enabled,input:enabled,textarea:enabled,select:enabled,summary')
       if(!controls?.length)return
-      const first=controls[0],last=controls[controls.length-1]
+      const visible=Array.from(controls).filter(control=>!control.closest('details:not([open])')||control.tagName==='SUMMARY')
+      if(!visible.length)return
+      const first=visible[0],last=visible[visible.length-1]
       if(event.shiftKey&&(document.activeElement===first||document.activeElement===node)){last.focus();event.preventDefault()}
       else if(!event.shiftKey&&document.activeElement===last){first.focus();event.preventDefault()}
     }
@@ -42,9 +48,15 @@ export function InstrumentReview({session,onExpired,onClose,onLogout}:{session:S
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[page,retry,session.token])
   function changed(){setReview(null);setConfirmed(false);setError('')}
+  function importPacket(){
+    try{const packet=parsePacket(raw);setDraft(draftFromPacket(packet,nextId));setRaw('');changed()}
+    catch(e){setReview(null);setConfirmed(false);setError((e as Error).message)}
+  }
   function prepare(){
     if(!index||uncertain||pending.current)return
-    try{const packet=parsePacket(raw);publicationInput(packet,reference,effective,expires,index.current_version);setReview({packet,expected:index.current_version});setConfirmed(false);setError('')}
+    try{
+      if(raw.trim())throw new InstrumentReviewError('Muat paket JSON ke formulir atau kosongkan kolom impor sebelum review.')
+      const packet=parsePacket(serializeDraft(draft));publicationInput(packet,reference,effective,expires,index.current_version);setReview({packet,expected:index.current_version});setConfirmed(false);setError('')}
     catch(e){setReview(null);setError((e as Error).message)}
   }
   async function publish(){
@@ -61,7 +73,7 @@ export function InstrumentReview({session,onExpired,onClose,onLogout}:{session:S
       if(!live.current)return
       const r=result.data
       if(!r||r.version!==body.version||r.approval_reference!==body.approval_reference||typeof r.approved_by!=='string'||!Number.isFinite(Date.parse(r.approved_at??''))||Date.parse(r.effective_at??'')!==Date.parse(body.effective_at)||Date.parse(r.expires_at??'')!==Date.parse(body.expires_at))throw new Error('Unverified receipt')
-      setReceipt(r);setReview(null);setConfirmed(false);setNotice('Publikasi tersimpan di server. Aktivasi Android tetap bergantung waktu berlaku, kedaluwarsa, persetujuan dan kelayakan peserta.');setRaw('');setRetry(n=>n+1)
+      setReceipt(r);setReview(null);setConfirmed(false);setNotice('Publikasi tersimpan di server. Aktivasi Android tetap bergantung waktu berlaku, kedaluwarsa, persetujuan dan kelayakan peserta.');setRaw('');setDraft(emptyInstrument);setReference('');setEffective('');setExpires('');setRetry(n=>n+1)
     }catch(e){
       if(!live.current)return
       setConfirmed(false);setReview(null)
@@ -87,8 +99,11 @@ export function InstrumentReview({session,onExpired,onClose,onLogout}:{session:S
           <p>Proposal asli belum tersedia. Health-ITUES, delta VAS, klasifikasi, pengingat dan notifikasi tidak termasuk publikasi ini. Gunakan matriks docs/research/instrument-traceability-pr15.md untuk review peneliti.</p>
         </section>
         <fieldset disabled={busy||uncertain}><legend>Paket definisi yang sudah ditinjau</legend>
-          <p>Tidak ada katalog atau referensi persetujuan bawaan. JSON berisi definition dan evidence, sesuai format dokumentasi. Sumber wajib mencakup instrumen, VAS, jadwal, validasi, setiap pertanyaan, status wajib dan setiap pilihan.</p>
-          <label>Paket review JSON<textarea rows={9} maxLength={120000} value={raw} onChange={e=>{setRaw(e.target.value);changed()}} spellCheck={false}/></label>
+          <InstrumentFields draft={draft} nextId={nextId} onChange={value=>{setDraft(value);changed()}}/>
+          <details><summary>Impor paket JSON (opsional)</summary>
+            <label>Paket review JSON<textarea rows={5} maxLength={120000} value={raw} onChange={e=>{setRaw(e.target.value);changed()}} spellCheck={false}/></label>
+            <button type="button" className="secondary" onClick={importPacket}>Muat paket ke formulir</button>
+          </details>
           <label>Referensi persetujuan versi ini<input value={reference} maxLength={80} onChange={e=>{setReference(e.target.value);changed()}} autoComplete="off"/></label>
           <label>Waktu berlaku (WIB)<input type="datetime-local" value={effective} onChange={e=>{setEffective(e.target.value);changed()}}/></label>
           <label>Kedaluwarsa (WIB)<input type="datetime-local" value={expires} onChange={e=>{setExpires(e.target.value);changed()}}/></label>
@@ -104,7 +119,8 @@ export function InstrumentReview({session,onExpired,onClose,onLogout}:{session:S
           {review.packet.definition.questions.map(q=><article key={q.code}><h4>{q.label} · {q.code} · {q.required?'Wajib':'Opsional'}</h4>
             <p>Sumber: {review.packet.evidence.questions[q.code].definition}; wajib/opsional: {review.packet.evidence.questions[q.code].required}</p>
             <ul>{q.options.map(o=><li key={o.value}>{o.label} ({o.value}) — {review.packet.evidence.questions[q.code].options[o.value]}</li>)}</ul></article>)}
-          <label><input type="checkbox" checked={confirmed} disabled={busy} onChange={e=>setConfirmed(e.target.checked)}/>{syntheticReview?'Saya telah memeriksa paket sintetis dan mengonfirmasi publikasi teknis pada lingkungan UAT terisolasi.':'Saya telah memeriksa sumber, pilihan, jadwal, VAS dan bukti persetujuan versi ini; saya mengonfirmasi publikasi eksplisit.'}</label>
+          <PatientPreview packet={review.packet}/>
+          <label className="instrument-check"><input type="checkbox" checked={confirmed} disabled={busy} onChange={e=>setConfirmed(e.target.checked)}/>{syntheticReview?'Saya telah memeriksa paket sintetis dan mengonfirmasi publikasi teknis pada lingkungan UAT terisolasi.':'Saya telah memeriksa sumber, pilihan, jadwal, VAS dan bukti persetujuan versi ini; saya mengonfirmasi publikasi eksplisit.'}</label>
           {syntheticReview?<p>Arsipkan paket dan catatan pengujian PR-17 dengan referensi teknis.</p>:<p>Sitasi dan centang bukan verifikasi tanda tangan digital. Arsipkan matriks/paket lengkap pada catatan persetujuan yang dirujuk; server menyimpan referensi, aktor dan waktu, bukan evidence lokal ini.</p>}
           <button type="button" className="primary" disabled={!confirmed||busy||uncertain} onClick={()=>{void publish()}}>{busy?'Menunggu tanda terima…':'Publikasikan versi ini'}</button>
         </section>}

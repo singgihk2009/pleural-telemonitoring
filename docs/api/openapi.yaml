@@ -2038,10 +2038,10 @@ components:
           type: string
         question_label:
           type: [string, 'null']
-          description: Staff history only; from the entry-linked immutable instrument, null for legacy/missing definition.
+          description: History only; from the entry-linked immutable instrument, null for legacy/missing definition.
         answer_label:
           type: [string, 'null']
-          description: Staff history only; exact linked option label, never current-version or invented wording.
+          description: History only; exact linked option label, never current-version or invented wording.
     DailyAssessment:
       type: object
       additionalProperties: false

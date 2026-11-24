@@ -34,6 +34,7 @@ export function Button({
   secondary,
   danger,
   testID,
+  checked,
 }: {
   title: string;
   onPress?: () => void;
@@ -41,13 +42,14 @@ export function Button({
   secondary?: boolean;
   danger?: boolean;
   testID?: string;
+  checked?: boolean;
 }) {
   return (
     <Pressable
       testID={testID}
-      accessibilityRole="button"
+      accessibilityRole={checked === undefined ? "button" : "radio"}
       accessibilityLabel={title}
-      accessibilityState={{ disabled: !!disabled }}
+      accessibilityState={{ disabled: !!disabled, checked }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
@@ -65,7 +67,7 @@ export function Button({
           disabled && { color: '#4A586A' },
         ]}
       >
-        {title}
+        {checked ? `✓ ${title}` : title}
       </Copy>
     </Pressable>
   );

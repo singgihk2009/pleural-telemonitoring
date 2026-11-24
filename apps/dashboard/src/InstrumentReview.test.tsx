@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import {readFileSync} from 'node:fs'
 import {URL as NodeURL} from 'node:url'
-import {render,screen,fireEvent,waitFor,cleanup} from '@testing-library/react'
+import {render,screen,fireEvent,waitFor,cleanup,within} from '@testing-library/react'
 import {vi,beforeEach,afterEach,test,expect} from 'vitest'
 import {InstrumentReview} from './InstrumentReview'
 import {ApiError,request} from './api'
@@ -14,8 +14,10 @@ const index={current_version:null,data:[],meta:{current_page:1,last_page:1}}
 const posts=()=>vi.mocked(request).mock.calls.filter(c=>c[2]==='POST')
 const mount=()=>render(<InstrumentReview session={session} onExpired={expired} onClose={close} onLogout={logout}/> )
 async function ready(raw=JSON.stringify(packet()),reference='SYNTHETIC_APPROVAL'){
- await screen.findByLabelText('Paket review JSON')
+ await screen.findByText('Impor paket JSON (opsional)')
+ fireEvent.click(screen.getByText('Impor paket JSON (opsional)'))
  fireEvent.change(screen.getByLabelText('Paket review JSON'),{target:{value:raw}})
+ fireEvent.click(screen.getByRole('button',{name:'Muat paket ke formulir'}))
  fireEvent.change(screen.getByLabelText('Referensi persetujuan versi ini'),{target:{value:reference}})
  fireEvent.change(screen.getByLabelText('Waktu berlaku (WIB)'),{target:{value:future(1)}})
  fireEvent.change(screen.getByLabelText('Kedaluwarsa (WIB)'),{target:{value:future(2)}})
@@ -33,7 +35,7 @@ test('empty source data stays pending; opening/reloading never POSTs or seeds de
 test('complete review still requires explicit confirmation; one guarded POST uses current version and strips citations',async()=>{
  mount();await ready();expect(posts()).toHaveLength(0)
  const button=screen.getByRole('button',{name:'Publikasikan versi ini'});expect(button.hasAttribute('disabled')).toBe(true)
- fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(button);fireEvent.click(button)
+ fireEvent.click(screen.getByRole('checkbox',{name:/mengonfirmasi publikasi eksplisit/}));fireEvent.click(button);fireEvent.click(button)
  await screen.findByRole('heading',{name:'Tanda terima publikasi server'})
  expect(posts()).toHaveLength(1);expect(posts()[0][3]).toMatchObject({expected_current_version:null,confirm_publication:true,approval_reference:'SYNTHETIC_APPROVAL'})
  expect(posts()[0][3]).not.toHaveProperty('evidence')
@@ -50,6 +52,40 @@ test('synthetic UAT review requests explicit technical confirmation and labels i
  expect(posts()).toHaveLength(1)
  expect(posts()[0][3]).toMatchObject({approval_reference:syntheticUatReference})
 })
+test('authors and orders questions using only the form before the publication review',async()=>{
+ mount()
+ await screen.findByLabelText('Versi instrumen')
+ const fill=(label:string,value:string)=>fireEvent.change(screen.getByLabelText(label),{target:{value}})
+ fill('Versi instrumen','SYNTHETIC_FORM_V1')
+ fill('Hari pertama','1')
+ fill('Hari terakhir','30')
+ fireEvent.click(screen.getByRole('checkbox',{name:/jadwal yang dirujuk/i}))
+ for(const label of ['Sumber instrumen','Sumber VAS','Sumber jadwal','Sumber validasi'])fill(label,'Fixture uji formulir, bagian 1')
+ for(const [index,code] of ['FORM_FIRST','FORM_SECOND'].entries()){
+   fireEvent.click(screen.getByRole('button',{name:'Tambah pertanyaan'}))
+   const question=within(screen.getByRole('group',{name:`Pertanyaan ${index+1}`}))
+   for(const [label,value] of [
+     ['Kode pertanyaan',code],['Teks pertanyaan',`Item uji ${index+1}`],['Sumber teks pertanyaan','Fixture uji formulir'],
+     ['Teks pilihan','Pilihan uji'],['Kode pilihan','TEST'],['Sumber pilihan','Fixture uji pilihan'],
+   ])fireEvent.change(question.getByLabelText(label),{target:{value}})
+   const decision=question.getByLabelText('Kewajiban jawaban')
+   expect((decision as HTMLSelectElement).value).toBe('')
+   fireEvent.change(decision,{target:{value:index?'optional':'required'}})
+   fireEvent.change(question.getByLabelText('Sumber keputusan wajib atau opsional'),{target:{value:'Fixture uji keputusan'}})
+ }
+ fireEvent.click(screen.getByRole('button',{name:'Naikkan pertanyaan 2'}))
+ fill('Referensi persetujuan versi ini','TEST_ONLY')
+ fill('Waktu berlaku (WIB)',future(1))
+ fill('Kedaluwarsa (WIB)',future(2))
+ fireEvent.click(screen.getByRole('button',{name:'Tinjau kesiapan publikasi'}))
+ const preview=within(await screen.findByRole('region',{name:'Pratinjau pasien'}))
+ expect(preview.getByText('Item uji 2 (opsional)')).toBeTruthy()
+ expect(posts()).toHaveLength(0)
+ fireEvent.click(screen.getByRole('checkbox',{name:/mengonfirmasi publikasi eksplisit/}))
+ fireEvent.click(screen.getByRole('button',{name:'Publikasikan versi ini'}))
+ await screen.findByRole('heading',{name:'Tanda terima publikasi server'})
+ expect(posts()[0][3]).toMatchObject({questions:[{code:'FORM_SECOND',required:false},{code:'FORM_FIRST',required:true}]})
+})
 test.each([401,403])('server %s denies access before showing the editor or any definitions',async code=>{
  vi.mocked(request).mockRejectedValue(new ApiError(code));mount()
  if(code===401)await waitFor(()=>expect(expired).toHaveBeenCalled());else await screen.findByRole('alert')
@@ -57,19 +93,19 @@ test.each([401,403])('server %s denies access before showing the editor or any d
 })
 test('fresh version conflict stops before POST and requires new review',async()=>{
  mount();await ready();vi.mocked(request).mockResolvedValue({...index,current_version:'SYNTHETIC_OTHER'})
- fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Publikasikan versi ini'}))
- await screen.findByText(/Versi aktif berubah/);expect(posts()).toHaveLength(0);expect(screen.queryByRole('checkbox')).toBeNull()
+ fireEvent.click(screen.getByRole('checkbox',{name:/mengonfirmasi publikasi eksplisit/}));fireEvent.click(screen.getByRole('button',{name:'Publikasikan versi ini'}))
+ await screen.findByText(/Versi aktif berubah/);expect(posts()).toHaveLength(0);expect(screen.queryByRole('checkbox',{name:/mengonfirmasi publikasi eksplisit/})).toBeNull()
 })
 test.each([409,422])('publication %s never claims success or automatically retries',async code=>{
  mount();await ready();const prior=vi.mocked(request).getMockImplementation()!
  vi.mocked(request).mockImplementation((path,t,m,...rest)=>m==='POST'?Promise.reject(new ApiError(code)):prior(path,t,m,...rest))
- fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Publikasikan versi ini'}))
+ fireEvent.click(screen.getByRole('checkbox',{name:/mengonfirmasi publikasi eksplisit/}));fireEvent.click(screen.getByRole('button',{name:'Publikasikan versi ini'}))
  await screen.findByRole('alert');expect(posts()).toHaveLength(1);expect(screen.queryByRole('heading',{name:'Tanda terima publikasi server'})).toBeNull()
 })
 test('lost response preserves uncertainty, no blind repost; pending close is disabled and unmounted response ignored',async()=>{
  const mounted=mount();await ready();let reject!:(e:Error)=>void;const prior=vi.mocked(request).getMockImplementation()!
  vi.mocked(request).mockImplementation((path,t,m,...rest)=>m==='POST'?new Promise((_ok,no)=>{reject=no}):prior(path,t,m,...rest))
- fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Publikasikan versi ini'}))
+ fireEvent.click(screen.getByRole('checkbox',{name:/mengonfirmasi publikasi eksplisit/}));fireEvent.click(screen.getByRole('button',{name:'Publikasikan versi ini'}))
  await waitFor(()=>expect(reject).toBeDefined());expect(screen.getByRole('button',{name:'Tutup review'}).hasAttribute('disabled')).toBe(true)
  reject(new Error('Synthetic lost response'));await screen.findByText(/Hasil publikasi belum dapat dipastikan/)
  expect(screen.getByLabelText('Paket review JSON').closest('fieldset')?.disabled).toBe(true)
@@ -77,22 +113,22 @@ test('lost response preserves uncertainty, no blind repost; pending close is dis
  expect(posts()).toHaveLength(1);mounted.unmount()
 })
 test('editing any review field invalidates confirmation',async()=>{
- mount();await ready();fireEvent.click(screen.getByRole('checkbox'))
+ mount();await ready();fireEvent.click(screen.getByRole('checkbox',{name:/mengonfirmasi publikasi eksplisit/}))
  fireEvent.change(screen.getByLabelText('Referensi persetujuan versi ini'),{target:{value:'SYNTHETIC_NEW'}})
- expect(screen.queryByRole('checkbox')).toBeNull();expect(posts()).toHaveLength(0)
+ expect(screen.queryByRole('checkbox',{name:/mengonfirmasi publikasi eksplisit/})).toBeNull();expect(posts()).toHaveLength(0)
 })
 
 test('mismatched receipt is uncertain, never a success or permission to re-POST',async()=>{
  mount();await ready();const prior=vi.mocked(request).getMockImplementation()!
  vi.mocked(request).mockImplementation((p,t,m,...rest)=>m==='POST'?Promise.resolve({data:{version:'SYNTHETIC_WRONG'}}):prior(p,t,m,...rest))
- fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Publikasikan versi ini'}))
+ fireEvent.click(screen.getByRole('checkbox',{name:/mengonfirmasi publikasi eksplisit/}));fireEvent.click(screen.getByRole('button',{name:'Publikasikan versi ini'}))
  await screen.findByText(/Hasil publikasi belum dapat dipastikan/);expect(posts()).toHaveLength(1)
  expect(screen.queryByRole('heading',{name:'Tanda terima publikasi server'})).toBeNull()
 })
 test('logout/unmount while POST is pending cannot show a late receipt or trigger another mutation',async()=>{
  const mounted=mount();await ready();let resolve!:(v:unknown)=>void;const prior=vi.mocked(request).getMockImplementation()!
  vi.mocked(request).mockImplementation((p,t,m,...rest)=>m==='POST'?new Promise(ok=>{resolve=ok}):prior(p,t,m,...rest))
- fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Publikasikan versi ini'}))
+ fireEvent.click(screen.getByRole('checkbox',{name:/mengonfirmasi publikasi eksplisit/}));fireEvent.click(screen.getByRole('button',{name:'Publikasikan versi ini'}))
  await waitFor(()=>expect(resolve).toBeDefined());fireEvent.click(screen.getByRole('button',{name:'Keluar'}));expect(logout).toHaveBeenCalledTimes(1)
  mounted.unmount();resolve({data:{version:'SYNTHETIC_REVIEW_V1'}});await Promise.resolve()
  expect(posts()).toHaveLength(1);expect(screen.queryByRole('dialog')).toBeNull()

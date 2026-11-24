@@ -73,3 +73,55 @@ function checkAndroidBudget(packet:Packet) {
   if((JSON.stringify({schema:1,state:'SYNCED',snapshot,body,createdAt:9999999999999,attempts:999999,nextAttemptAt:9999999999999,uncertain:true,reason:'VERSION_DATE_OR_STATUS_CHANGED',receipt}).length+256)*3>16384)
     throw new InstrumentReviewError('Ukuran definisi melampaui anggaran antrean Android. Tinjau kompatibilitas; jangan memotong pertanyaan atau pilihan tanpa persetujuan peneliti.')
 }
+
+export type OptionDraft = {id:number; value:string; label:string; source:string}
+export type QuestionDraft = {
+  id:number; code:string; label:string; required:''|'required'|'optional';
+  definitionSource:string; requiredSource:string; options:OptionDraft[]
+}
+export type InstrumentDraft = {
+  version:string; firstDay:string; lastDay:string; scheduleConfirmed:boolean;
+  instrument:string; vas:string; schedule:string; validation:string; questions:QuestionDraft[]
+}
+
+export const emptyInstrument:InstrumentDraft = {
+  version:'', firstDay:'', lastDay:'', scheduleConfirmed:false,
+  instrument:'', vas:'', schedule:'', validation:'', questions:[],
+}
+
+export function draftFromPacket(packet:Packet, nextId:()=>number):InstrumentDraft {
+  const {definition,evidence}=packet
+  return {
+    version:definition.version, firstDay:String(definition.schedule.first_day),
+    lastDay:String(definition.schedule.last_day), scheduleConfirmed:true,
+    instrument:evidence.instrument, vas:evidence.vas, schedule:evidence.schedule, validation:evidence.validation,
+    questions:definition.questions.map(q=>({
+      id:nextId(), code:q.code, label:q.label, required:q.required?'required':'optional',
+      definitionSource:evidence.questions[q.code].definition, requiredSource:evidence.questions[q.code].required,
+      options:q.options.map(o=>({...o,id:nextId(),source:evidence.questions[q.code].options[o.value]})),
+    })),
+  }
+}
+
+export function serializeDraft(draft:InstrumentDraft):string {
+  return JSON.stringify({
+    definition:{
+      version:draft.version,
+      schedule:{
+        timezone:'Asia/Jakarta', first_day:Number(draft.firstDay), last_day:Number(draft.lastDay),
+        late_policy:draft.scheduleConfirmed?'same_day_only':null,
+      },
+      questions:draft.questions.map(q=>({
+        code:q.code,label:q.label,required:q.required?q.required==='required':null,
+        options:q.options.map(o=>({value:o.value,label:o.label})),
+      })),
+    },
+    evidence:{
+      instrument:draft.instrument,vas:draft.vas,schedule:draft.schedule,validation:draft.validation,
+      questions:Object.fromEntries(draft.questions.map(q=>[q.code,{
+        definition:q.definitionSource,required:q.requiredSource,
+        options:Object.fromEntries(q.options.map(o=>[o.value,o.source])),
+      }])),
+    },
+  })
+}

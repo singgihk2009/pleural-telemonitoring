@@ -1345,3 +1345,17 @@ tbody tr:hover {
 .instrument-body button { min-height: 44px; margin: 6px; }
 
 .instrument-modal .modal-head button { min-height: 44px; margin-left: 8px; }
+
+.instrument-body select { width: 100%; padding: 10px; border: 1px solid #8a95ac; border-radius: 6px; background: #fff; }
+.instrument-body fieldset { min-width: 0; margin-block: 12px; }
+.instrument-body .instrument-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 12px; }
+.instrument-body .instrument-check { display: flex; align-items: flex-start; gap: 10px; }
+.instrument-check input { flex: none; }
+.instrument-question { background: #f7f9fc; }
+.instrument-actions { display: flex; flex-wrap: wrap; }
+.instrument-preview { max-width: 420px; padding: 16px; border: 1px solid #ccd3e0; border-radius: 12px; background: #edf4fc; }
+.instrument-preview li { margin-block: 6px; }
+
+.instrument-preview-card { padding: 12px; margin-top: 10px; border: 1px solid #cdd9e7; border-radius: 10px; background: #fff; }
+.instrument-preview-track { height: 4px; border-radius: 2px; background: #52657b; }
+.instrument-preview-scale { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; }

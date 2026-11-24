@@ -172,7 +172,7 @@ class AssessmentController extends Controller
     {
         $page = $query->with(['symptoms', 'assessmentSetting'])->orderByDesc('tanggal_wib')->orderByDesc('id')->paginate(25);
 
-        return response()->json(['data' => $page->getCollection()->map(fn ($entry) => $this->projection($entry, $filters !== null))->all(),
+        return response()->json(['data' => $page->getCollection()->map(fn ($entry) => $this->projection($entry, historicalLabels: true))->all(),
             'meta' => ['current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'total' => $page->total(), ...($filters !== null ? ['filters' => $filters] : [])]]);
     }
 

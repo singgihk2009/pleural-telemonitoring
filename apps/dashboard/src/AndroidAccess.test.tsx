@@ -328,6 +328,17 @@ test('hidden view cannot reveal plaintext; returning requires a matching server 
   await screen.findByRole('alert')
 })
 
+test('issuing while the document is hidden waits for foreground revalidation before revealing', async () => {
+  const visibility = vi.spyOn(document, 'visibilityState', 'get')
+  visibility.mockReturnValue('hidden')
+  mount()
+  await issue()
+  expect(screen.queryByText('000042')).toBeNull()
+  visibility.mockReturnValue('visible')
+  fireEvent(document, new Event('visibilitychange'))
+  await screen.findByText('000042')
+})
+
 test('lost issuance response is not cancellation; reload and confirmed reset recover safely', async () => {
   let lose = true
   handler = (method) => {

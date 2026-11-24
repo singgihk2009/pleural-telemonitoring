@@ -134,23 +134,28 @@ function DailyForm() {
     }
   }
   const questionnaire = state?.questionnaire;
+  const stepLabel = step === 'vas' ? '1 dari 3 · Tingkat sesak' : step === 'symptoms' ? '2 dari 3 · Jawaban' : '3 dari 3 · Periksa dan konfirmasi';
   const complete = filledBy !== null && questionnaire?.questions.every(q => !q.required || answers[q.code] !== undefined);
   return (
     <Frame title={success ? 'Terkirim' : step === 'vas' ? 'Isi harian' : step === 'confirm' ? 'Konfirmasi isian' : 'Gejala hari ini'}
-      step="F3 · ISIAN HARIAN"
+      step={success ? 'ISIAN HARIAN' : stepLabel}
       onBack={durable?.enabled && attempt ? () => router.replace('/') : busy || attempt ? () => {} : step !== 'vas' ? () => setStep(step === 'confirm' ? 'symptoms' : 'vas') : undefined}>
       {!visible ? <Notice>Isian disembunyikan saat aplikasi tidak aktif.</Notice> : <>
         {(durable?.error || error) ? <Notice>{durable?.error || error}</Notice> : null}
         {!!durable?.lockedPredecessors && <Notice>Ada salinan lokal dari kredensial sebelumnya yang tetap terkunci. Periksa riwayat server dan kebijakan pemulihan bersama tim penelitian. Tidak ada isian lama yang dihapus otomatis.</Notice>}
         {durable && !durable.available && <Notice>Server atau kredensial ini belum mendukung antrean terenkripsi. Gunakan hanya saat online; isian belum tersimpan sampai ada tanda terima server.</Notice>}
-        {durable?.enabled && <Notice>{durable.writing ? 'Menyimpan perubahan ke penyimpanan aman. Tunggu sebelum menutup aplikasi.' : !durable.record ? 'Penyimpanan terenkripsi siap. Belum ada draf lokal.' : durable.record.state === 'SYNCED' ? 'Tanda terima server diverifikasi.' : 'Draf/antrean disimpan terenkripsi pada perangkat. Belum tersimpan di server sampai ada tanda terima. Validitas versi dan tanggal diperiksa saat sinkronisasi.'}</Notice>}
+        {durable?.enabled && durable.writing && <Notice>Menyimpan perubahan secara terenkripsi. Tunggu sebelum menutup aplikasi.</Notice>}
+        {durable?.enabled && !durable.writing && !durable.record && <Notice>Penyimpanan terenkripsi siap. Belum ada draf lokal.</Notice>}
         {durable?.record?.state === 'DRAFT' && <Card>
+          <Heading>Draf terenkripsi di perangkat</Heading>
           <Copy>Draf belum dikirim · tanggal {durable.record.body.date_wib} WIB.</Copy>
           <Copy>Jika tanggal telah berganti, buang draf dengan konfirmasi untuk memeriksa pengisian hari ini. Jawaban lokal yang belum dikirim akan hilang; tanggal dan identitas draf tidak diubah otomatis.</Copy>
           <Button title="Buang draf belum dikirim…" secondary disabled={busy || durable.writing || durable.syncing} onPress={discardDraft} />
         </Card>}
         {durable?.record && !['DRAFT','SYNCED'].includes(durable.record.state) && <Card>
           <Copy>{stateText[durable.record.state]}. {reasonText[durable.record.reason ?? ''] ?? ''}</Copy>
+          {patient.offline && durable.record.state === 'PENDING_SYNC' &&
+            <Copy>Isian tersimpan terenkripsi. Sambungkan perangkat agar aplikasi dapat memeriksa dan menyinkronkan isian.</Copy>}
           <Copy>Permintaan lama tidak diubah. Isian terlambat/versi berubah perlu rekonsiliasi, bukan perubahan tanggal otomatis.</Copy>
           {durable.record.nextAttemptAt > 0 && <Copy>Percobaan berikutnya paling cepat {new Date(durable.record.nextAttemptAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB. {['REJECTED','RECONCILIATION_REQUIRED'].includes(durable.record.state) ? 'Ini hanya waktu pemeriksaan manual. Tidak ada pengiriman otomatis dari karantina.' : 'Setelah lima percobaan otomatis, periksa kembali secara manual.'}</Copy>}
           <Button title="Periksa server / sinkronkan" secondary disabled={patient.offline || durable.syncing || durable.writing} onPress={() => { void durable.synchronize(true); }} />
@@ -158,7 +163,8 @@ function DailyForm() {
         </Card>}
         {loading ? <ActivityIndicator accessibilityLabel="Memuat assessment" /> : success ? <Card>
           <Heading>Isian berhasil tersimpan</Heading>
-          <Copy>Hari {success.study_day} · {success.date_wib}</Copy>
+          <Copy>Hari {success.study_day} · {success.date_wib} WIB</Copy>
+          <Copy>VAS {success.vas_mm} mm</Copy>
           <Copy>Diterima server: {new Date(success.received_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB</Copy>
           <Copy>Ini bukti penyimpanan, bukan hasil penilaian klinis. Tidak ada klasifikasi atau peringatan otomatis.</Copy>
           <Button title="Lihat riwayat" onPress={() => router.replace('/history')} />
@@ -176,20 +182,32 @@ function DailyForm() {
           </> : step === 'symptoms' ? <>
             <Copy>Versi instrumen: {questionnaire.version}</Copy>
             {questionnaire.questions.map(q => <Card key={q.code}>
-              <Heading>{q.label}{q.required ? ' *' : ' (opsional)'}</Heading>
-              <View style={{ gap: 12 }}>{q.options.map(option => <Button key={option.id}
-                title={`${answers[q.code] === option.id ? '✓ ' : ''}${option.label}`}
-                secondary={answers[q.code] !== option.id} onPress={() => change({ answers: { ...form.current.answers, [q.code]: option.id } })} />)}</View>
+              <Heading>{q.label}</Heading>
+              <Copy>{q.required ? 'Wajib dijawab' : 'Opsional'}</Copy>
+              <View accessibilityRole="radiogroup" accessibilityLabel={q.label} style={{ gap: 12 }}>
+                {q.options.map(option => <Button key={option.id}
+                  title={option.label} checked={answers[q.code] === option.id}
+                  secondary={answers[q.code] !== option.id} onPress={() => change({ answers: { ...form.current.answers, [q.code]: option.id } })} />)}
+              </View>
+              {!q.required && answers[q.code] !== undefined && <Button title="Kosongkan pilihan" secondary onPress={() => {
+                const next = { ...form.current.answers };
+                delete next[q.code];
+                change({ answers: next });
+              }} />}
             </Card>)}
-            <Card><Heading>Diisi oleh *</Heading>
-              <Button title={filledBy === 'PASIEN' ? '✓ Pasien' : 'Pasien'} secondary={filledBy !== 'PASIEN'} onPress={() => change({ filledBy: 'PASIEN' })} />
-              <Button title={filledBy === 'KELUARGA' ? '✓ Keluarga' : 'Keluarga'} secondary={filledBy !== 'KELUARGA'} onPress={() => change({ filledBy: 'KELUARGA' })} />
+            <Card><Heading>Diisi oleh</Heading>
+              <Copy>Wajib dipilih</Copy>
+              <View accessibilityRole="radiogroup" accessibilityLabel="Diisi oleh" style={{ gap: 12 }}>
+                <Button title="Pasien" checked={filledBy === 'PASIEN'} secondary={filledBy !== 'PASIEN'} onPress={() => change({ filledBy: 'PASIEN' })} />
+                <Button title="Keluarga" checked={filledBy === 'KELUARGA'} secondary={filledBy !== 'KELUARGA'} onPress={() => change({ filledBy: 'KELUARGA' })} />
+              </View>
             </Card>
-            {!complete && <Copy>Lengkapi semua isian bertanda *.</Copy>}
+            {!complete && <Copy>Jawab semua pertanyaan wajib dan pilih siapa yang mengisi.</Copy>}
             <Button title="Periksa isian" disabled={!complete || durable?.writing || !!durable?.error} onPress={() => setStep('confirm')} />
           </> : <Card>
             <Heading>Periksa sebelum mengirim</Heading>
-            <Copy>Hari {state.study_day} · {state.date_wib} · VAS {value} mm · {filledBy}</Copy>
+            <Copy>Hari {state.study_day} · {state.date_wib} WIB</Copy>
+            <Copy>VAS {value} mm · Diisi oleh {filledBy === 'PASIEN' ? 'pasien' : 'keluarga'}</Copy>
             {questionnaire.questions.map(q => <Copy key={q.code}>{q.label}: {q.options.find(o => o.id === answers[q.code])?.label ?? 'Tidak diisi'}</Copy>)}
             <Copy>Jawaban yang sudah tersimpan tidak dapat diedit. Pengiriman ini tidak menghasilkan keputusan klinis.</Copy>
             {attempt && !durable?.enabled && <Notice>Pengiriman sebelumnya mungkin telah tersimpan. Coba lagi memakai identitas dan isian yang sama. Jika layar ditutup atau sesi berakhir, muat status dan riwayat sebelum mengisi kembali.</Notice>}
@@ -233,7 +251,7 @@ function History() {
           <Copy>VAS {entry.vas_mm} mm · {entry.filled_by}</Copy>
           <Copy style={styles.muted}>Diterima {new Date(entry.received_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB</Copy>
           <Copy>Versi: {entry.version ?? 'Catatan sebelumnya'}</Copy>
-          {entry.answers.map(answer => <Copy key={answer.code}>{answer.code}: {answer.value}</Copy>)}
+          {entry.answers.map(answer => <Copy key={answer.code}>{answer.question_label ?? answer.code}: {answer.answer_label ?? answer.value}</Copy>)}
         </Card>)}
         <Button title="Halaman sebelumnya" secondary disabled={page <= 1} onPress={() => setPage(p => p - 1)} />
         <Button title="Halaman berikutnya" secondary disabled={page >= result.meta.last_page} onPress={() => setPage(p => p + 1)} />

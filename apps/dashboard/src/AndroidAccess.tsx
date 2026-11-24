@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ApiError, errorMessage, request } from './api'
 import type { Enrollment, Session } from './api'
 import { generatePin } from './pin'
+
+const isDocumentHidden = () => document.visibilityState === 'hidden'
 
 type Snapshot = { status: CredentialStatus; revision: string | null }
 const revisionValid = (value: unknown): value is string | null =>
@@ -184,7 +186,8 @@ function CredentialPanel({
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
   }, [mutating])
-  useEffect(() => {
+  // Register the visibility guard before a newly issued PIN can be painted.
+  useLayoutEffect(() => {
     if (!pin || pin.owner !== session.token) return
     const operation = pin.revision
     const run = generation.current
@@ -196,10 +199,10 @@ function CredentialPanel({
       const abort = new AbortController()
       requestController = abort
       setVerified(false)
-      if (document.visibilityState === 'hidden') return
+      if (isDocumentHidden()) return
       try {
         const snapshot = await read(abort.signal)
-        if (run !== generation.current || call !== check) return
+        if (run !== generation.current || call !== check || isDocumentHidden()) return
         if (snapshot.status !== 'AKTIF' || snapshot.revision !== operation) {
           setPin(null)
           setStatus(null)
@@ -289,7 +292,7 @@ function CredentialPanel({
         }
         setPin({ owner: session.token, value: created, revision })
         setVerifiedAt(new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }))
-        setVerified(true)
+        setVerified(!isDocumentHidden())
       } else setNotice('Pencabutan selesai. Periksa status akses terkini di atas.')
     } catch (failure) {
       if (generation.current !== run) return

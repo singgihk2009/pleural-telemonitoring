@@ -25,8 +25,8 @@ async function fill() {
   await screen.findByText('— — mm');
   await fireEvent(screen.getByRole('adjustable'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
   await fireEvent.press(screen.getByRole('button', { name: 'Lanjut' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Pilihan sintetis' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Pasien' }));
+  await fireEvent.press(screen.getByRole('radio', { name: 'Pilihan sintetis' }));
+  await fireEvent.press(screen.getByRole('radio', { name: 'Pasien' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Periksa isian' })).toBeEnabled());
   await fireEvent.press(screen.getByRole('button', { name: 'Periksa isian' }));
 }
