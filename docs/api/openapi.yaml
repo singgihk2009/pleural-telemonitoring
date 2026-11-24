@@ -2407,6 +2407,7 @@ components:
         approval_reference:
           type: string
           pattern: ^[A-Za-z0-9_-]{1,80}$
+          description: External approval reference for research. SYNTHETIC-UAT-TECHNICAL-ONLY is reserved for synthetic publications on the explicitly enabled, isolated UAT environment.
         effective_at:
           type: string
           format: date-time

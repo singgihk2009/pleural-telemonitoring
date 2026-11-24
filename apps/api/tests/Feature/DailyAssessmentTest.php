@@ -72,6 +72,105 @@ class DailyAssessmentTest extends TestCase
             'answers' => [['code' => 'SYNTHETIC_ITEM', 'option_id' => $setting->nilai_json['questions'][0]['options'][0]['id']]]];
     }
 
+    public function test_synthetic_uat_packet_is_isolated_and_uses_the_complete_publication_and_assessment_flow(): void
+    {
+        $packet = json_decode(file_get_contents(base_path('tests/Fixtures/synthetic-uat-daily.json')), true, flags: JSON_THROW_ON_ERROR);
+        $body = $packet['definition'] + [
+            'expected_current_version' => null,
+            'confirm_publication' => true,
+            'approval_reference' => 'SYNTHETIC-UAT-TECHNICAL-ONLY',
+            'effective_at' => now()->addMinute()->utc()->format('Y-m-d\TH:i:s.v\Z'),
+            'expires_at' => now()->addMinutes(3)->utc()->format('Y-m-d\TH:i:s.v\Z'),
+        ];
+        $staff = StaffUser::factory()->create();
+        $staff->roles()->attach(ResearchRole::firstOrCreate(['kode' => 'PENELITI_UTAMA']));
+        $researcherToken = $this->token($staff);
+        $patient = $this->patient();
+        $patientToken = $this->token($patient);
+        $publish = '/research/daily-instruments/publish';
+        $status = '/patient/assessments/status';
+
+        $database = DB::connection();
+        $originalName = $database->getDatabaseName();
+        $originalEnv = app()->environment();
+        $originalFlag = config('assessment.synthetic_uat');
+        try {
+            config(['assessment.synthetic_uat' => true]);
+            app()->instance('env', 'production');
+            $this->api($researcherToken, 'POST', $publish, $body)->assertUnprocessable();
+            $this->api($researcherToken, 'POST', $publish, array_replace($body, [
+                'version' => 'RENAMED', 'approval_reference' => 'RENAMED',
+            ]))->assertUnprocessable();
+
+            app()->instance('env', 'uat');
+            $database->setDatabaseName('telenapas_demo');
+            $this->api($researcherToken, 'POST', $publish, $body)->assertUnprocessable();
+
+            // Simulate the selected database name in generic CI; the PDO connection stays on its disposable schema.
+            $database->setDatabaseName('telenapas_synthetic_uat_test');
+            config(['assessment.synthetic_uat' => false]);
+            $this->api($researcherToken, 'POST', $publish, $body)->assertUnprocessable();
+            config(['assessment.synthetic_uat' => true]);
+
+            $clinical = array_replace($body, [
+                'version' => 'ORDINARY_V1', 'approval_reference' => 'ORDINARY_REFERENCE',
+                'questions' => [array_replace($body['questions'][0], ['code' => 'ORDINARY_QUESTION'])],
+            ]);
+            $this->api($researcherToken, 'POST', $publish, $clinical)->assertUnprocessable();
+            $this->api($patientToken, 'POST', $publish, $body)->assertForbidden();
+            $this->assertDatabaseCount('pengaturan', 0);
+            $this->api($researcherToken, 'POST', $publish, $body)->assertCreated()
+                ->assertJsonPath('data.approval_reference', $body['approval_reference']);
+            $this->api($patientToken, 'GET', $status)->assertOk()->assertJsonPath('data.available', false);
+
+            $this->travel(61)->seconds();
+            app()->instance('env', 'production');
+            $this->api($patientToken, 'GET', $status)->assertOk()->assertJsonPath('data.available', false);
+            app()->instance('env', 'uat');
+            $available = $this->api($patientToken, 'GET', $status)->assertOk()
+                ->assertJsonPath('data.can_submit', true)->assertJsonPath('data.study_day', 1)
+                ->assertJsonPath('data.questionnaire.version', $body['version'])
+                ->assertJsonPath('data.questionnaire.questions.0.label', $body['questions'][0]['label']);
+
+            $submission = [
+                'submission_id' => (string) Str::uuid(),
+                'version' => $body['version'],
+                'date_wib' => $available->json('data.date_wib'),
+                'vas_mm' => 0,
+                'filled_by' => 'PASIEN',
+                'device_created_at' => now()->utc()->format('Y-m-d\TH:i:s.v\Z'),
+                'answers' => [[
+                    'code' => $body['questions'][0]['code'],
+                    'option_id' => $available->json('data.questionnaire.questions.0.options.0.id'),
+                ]],
+            ];
+            $this->api($patientToken, 'POST', body: array_replace($submission, ['answers' => []]))->assertUnprocessable();
+            $initial = $this->api($patientToken, 'POST', body: $submission)->assertCreated()->assertJsonPath('data.vas_mm', 0);
+            $this->api($patientToken, 'POST', body: $submission)->assertOk()
+                ->assertJsonPath('replayed', true)->assertJsonPath('data', $initial->json('data'));
+            $this->api($patientToken, 'POST', body: array_replace($submission, ['vas_mm' => 100]))->assertConflict();
+            $this->api($researcherToken, 'GET', '/participants/'.$patient->responden_id.'/assessments?type=HARIAN')
+                ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $submission['submission_id'])
+                ->assertJsonPath('data.0.version', $body['version'])
+                ->assertJsonPath('data.0.answers.0.answer_label', $body['questions'][0]['options'][0]['label']);
+
+            $this->travel(120)->seconds();
+            $this->api($patientToken, 'GET', $status)->assertOk()->assertJsonPath('data.available', false);
+            $this->api($patientToken, 'GET', '/patient/assessments?submission_id='.$submission['submission_id'])
+                ->assertOk()->assertJsonPath('meta.total', 1);
+            $this->assertSame(1, AuditLog::where('aksi', 'instrument.published')->count());
+            $this->assertSame(1, AuditLog::where('aksi', 'assessment.submitted')->count());
+            $this->assertDatabaseCount('entri_harian', 1);
+            $this->assertDatabaseCount('klasifikasi', 0);
+            $this->assertDatabaseCount('peringatan', 0);
+            $this->assertDatabaseCount('notification_deliveries', 0);
+        } finally {
+            $database->setDatabaseName($originalName);
+            app()->instance('env', $originalEnv);
+            config(['assessment.synthetic_uat' => $originalFlag]);
+        }
+    }
+
     public function test_research_history_filters_are_inclusive_scoped_and_use_the_linked_version_labels(): void
     {
         $setting = SyntheticDailyInstrument::create();

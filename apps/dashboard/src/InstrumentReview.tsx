@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react'
 import {ApiError,request,type Session} from './api'
-import {parsePacket,publicationInput,InstrumentReviewError,type Packet} from './instrument'
+import {parsePacket,publicationInput,InstrumentReviewError,isSyntheticUatVersion,type Packet} from './instrument'
 
 type Published = {version:string;approved_by:string|null;approved_at:string|null;effective_at:string|null;expires_at:string|null;approval_reference:string|null;definition:unknown}
 type Index = {current_version:string|null;data:Published[];meta:{current_page:number;last_page:number}}
@@ -70,6 +70,7 @@ export function InstrumentReview({session,onExpired,onClose,onLogout}:{session:S
       failure(e)
     }finally{window.clearTimeout(timeout);pending.current=false;if(live.current)setBusy(false)}
   }
+  const syntheticReview=review!==null&&isSyntheticUatVersion(review.packet.definition.version)
   return <div className="modal-backdrop"><section ref={dialog} tabIndex={-1} onKeyDown={e=>{if(e.key==='Escape'&&!pending.current)onClose()}} className="enrollment-modal instrument-modal" role="dialog" aria-modal="true" aria-labelledby="instrument-title">
     <header className="modal-head"><div><span className="eyebrow">PENELITI UTAMA · REVIEW</span><h2 id="instrument-title">Instrumen asesmen harian</h2></div>
       <div><button type="button" className="secondary" disabled={busy} onClick={onClose}>Tutup review</button><button type="button" className="secondary" onClick={()=>{void onLogout()}}>Keluar</button></div>
@@ -94,6 +95,7 @@ export function InstrumentReview({session,onExpired,onClose,onLogout}:{session:S
           <button type="button" className="secondary" onClick={prepare}>Tinjau kesiapan publikasi</button>
         </fieldset>
         {review&&<section className="form-section"><h3>Ringkasan sebelum publikasi</h3>
+          {syntheticReview&&<p><strong>SYNTHETIC-UAT · Pengujian teknis di lingkungan terisolasi</strong></p>}
           <p>Versi {review.packet.definition.version}; menggantikan versi aktif {review.expected??'tidak ada'}.</p>
           <p>VAS terpisah: bilangan bulat 0–100 mm, tanpa pilihan awal. Sumber: {review.packet.evidence.vas}</p>
           <p>Jadwal: hari {review.packet.definition.schedule.first_day}–{review.packet.definition.schedule.last_day}, WIB; hanya hari yang sama. Sumber: {review.packet.evidence.schedule}</p>
@@ -102,15 +104,15 @@ export function InstrumentReview({session,onExpired,onClose,onLogout}:{session:S
           {review.packet.definition.questions.map(q=><article key={q.code}><h4>{q.label} · {q.code} · {q.required?'Wajib':'Opsional'}</h4>
             <p>Sumber: {review.packet.evidence.questions[q.code].definition}; wajib/opsional: {review.packet.evidence.questions[q.code].required}</p>
             <ul>{q.options.map(o=><li key={o.value}>{o.label} ({o.value}) — {review.packet.evidence.questions[q.code].options[o.value]}</li>)}</ul></article>)}
-          <label><input type="checkbox" checked={confirmed} disabled={busy} onChange={e=>setConfirmed(e.target.checked)}/>Saya telah memeriksa sumber, pilihan, jadwal, VAS dan bukti persetujuan versi ini; saya mengonfirmasi publikasi eksplisit.</label>
-          <p>Sitasi dan centang bukan verifikasi tanda tangan digital. Arsipkan matriks/paket lengkap pada catatan persetujuan yang dirujuk; server menyimpan referensi, aktor dan waktu, bukan evidence lokal ini.</p>
+          <label><input type="checkbox" checked={confirmed} disabled={busy} onChange={e=>setConfirmed(e.target.checked)}/>{syntheticReview?'Saya telah memeriksa paket sintetis dan mengonfirmasi publikasi teknis pada lingkungan UAT terisolasi.':'Saya telah memeriksa sumber, pilihan, jadwal, VAS dan bukti persetujuan versi ini; saya mengonfirmasi publikasi eksplisit.'}</label>
+          {syntheticReview?<p>Arsipkan paket dan catatan pengujian PR-17 dengan referensi teknis.</p>:<p>Sitasi dan centang bukan verifikasi tanda tangan digital. Arsipkan matriks/paket lengkap pada catatan persetujuan yang dirujuk; server menyimpan referensi, aktor dan waktu, bukan evidence lokal ini.</p>}
           <button type="button" className="primary" disabled={!confirmed||busy||uncertain} onClick={()=>{void publish()}}>{busy?'Menunggu tanda terima…':'Publikasikan versi ini'}</button>
         </section>}
-        {receipt&&<section><h3>Tanda terima publikasi server</h3><p>Versi {receipt.version}; peneliti {receipt.approved_by}; disetujui {stamp(receipt.approved_at)}; berlaku {stamp(receipt.effective_at)}; kedaluwarsa {stamp(receipt.expires_at)}; referensi {receipt.approval_reference}.</p></section>}
+        {receipt&&<section><h3>Tanda terima publikasi server</h3><p>Versi {receipt.version}; peneliti {receipt.approved_by}; {isSyntheticUatVersion(receipt.version)?'dicatat':'disetujui'} {stamp(receipt.approved_at)}; berlaku {stamp(receipt.effective_at)}; kedaluwarsa {stamp(receipt.expires_at)}; referensi {receipt.approval_reference}.</p></section>}
         <section className="form-section"><h3>Versi tersimpan · hanya baca</h3>
           <button type="button" className="secondary" disabled={busy} onClick={()=>setRetry(n=>n+1)}>Periksa daftar server</button>
           {index.data.length===0?<p>Belum ada versi tersimpan. Tidak ada instrumen yang dibuat otomatis.</p>:index.data.map(entry=><details key={entry.version}><summary>{entry.version} · referensi {entry.approval_reference??'belum tercatat'}</summary>
-            <p>Peneliti: {entry.approved_by??'belum tercatat'}; persetujuan: {stamp(entry.approved_at)}; berlaku: {stamp(entry.effective_at)}; kedaluwarsa: {stamp(entry.expires_at)}.</p><pre>{JSON.stringify(entry.definition,null,2)}</pre></details>)}
+            <p>Peneliti: {entry.approved_by??'belum tercatat'}; {isSyntheticUatVersion(entry.version)?'pencatatan teknis':'persetujuan'}: {stamp(entry.approved_at)}; berlaku: {stamp(entry.effective_at)}; kedaluwarsa: {stamp(entry.expires_at)}.</p><pre>{JSON.stringify(entry.definition,null,2)}</pre></details>)}
           <button type="button" className="secondary" disabled={busy||page<=1} onClick={()=>setPage(n=>n-1)}>Versi sebelumnya</button><button type="button" className="secondary" disabled={busy||page>=index.meta.last_page} onClick={()=>setPage(n=>n+1)}>Versi berikutnya</button>
           <p>Definisi tersimpan immutable; revisi memerlukan versi baru. Jika respons hilang, periksa versi pada seluruh halaman. Versi yang ditemukan tidak membuktikan bahwa permintaan terakhir Anda yang membuatnya.</p>
         </section>
