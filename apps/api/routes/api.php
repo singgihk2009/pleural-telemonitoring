@@ -5,6 +5,7 @@ use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\EnrollmentController;
+use App\Http\Controllers\HealthItuesController;
 use App\Http\Controllers\InstrumentPublicationController;
 use App\Http\Controllers\ParticipantController;
 use Illuminate\Database\QueryException;
@@ -31,6 +32,8 @@ Route::middleware(['auth:sanctum', 'principal.active'])->group(function () {
         Route::get('/patient/assessments', [AssessmentController::class, 'history']);
         Route::get('/participants/{participant}/assessments', [AssessmentController::class, 'researcherHistory']);
     });
+    Route::get('/patient/health-itues/status', [HealthItuesController::class, 'status'])->middleware('throttle:assessment');
+    Route::get('/research/health-itues/instrument', [HealthItuesController::class, 'review'])->middleware('throttle:assessment');
     Route::get('/research/daily-instruments', [InstrumentPublicationController::class, 'index'])->middleware('throttle:assessment');
     Route::post('/research/daily-instruments/publish', [InstrumentPublicationController::class, 'publish'])->middleware('throttle:assessment');
     Route::get('/research/access', [EnrollmentController::class, 'access']);

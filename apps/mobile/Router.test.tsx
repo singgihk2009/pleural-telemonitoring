@@ -168,6 +168,24 @@ test('day 31 closes daily navigation and leaves final form available', async () 
   expect(screen.getByRole('button', { name: 'Kirim penilaian · belum tersedia' })).toBeDisabled();
 });
 
+test('synthetic preview shows assigned statements without enabling answers or a study-day rule', async () => {
+  loginReplies();
+  mockFetch.mockResolvedValueOnce(reply({ data: { can_submit: false, preview: {
+    version: 'synthetic-preview', subscales: [{ label: 'Kelompok sintetis', items: [
+      { code: 'S01', statement: 'Pernyataan uji sintetis.' },
+    ] }],
+  } } }));
+  await renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('Selamat datang');
+  await enter();
+  await screen.findByText('Pernyataan awal');
+  await fireEvent.press(screen.getByRole('checkbox'));
+  await fireEvent.press(screen.getByRole('button', { name: 'Lanjut' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Buka formulir akhir' }));
+  expect(await screen.findByText('S01 · Pernyataan uji sintetis.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Kirim penilaian · belum tersedia' })).toBeDisabled();
+});
+
 test('secure storage failure revokes the issued token and keeps login closed', async () => {
   loginReplies();
   mockFetch.mockResolvedValueOnce(reply({}));
