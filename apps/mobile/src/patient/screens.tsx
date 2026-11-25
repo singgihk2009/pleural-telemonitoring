@@ -1,3 +1,4 @@
+import { EducationCatalog } from './EducationCatalog';
 import { useOfflineQueue } from './offline/context';
 import { DailyAssessment, AssessmentHistory } from './DailyAssessment';
 export { VasControl } from './VasControl';
@@ -349,30 +350,9 @@ export function ContactScreen() {
 export function HistoryScreen() {
   return <Protected final><AssessmentHistory /></Protected>;
 }
-const education = [
-  'Tanda bahaya',
-  'Teknik napas (pursed-lip dan diafragma)',
-  'Perawatan bekas tusukan',
-  'Kapan harus kontrol',
-];
 export function EducationScreen() {
-  return (
-    <Protected>
-      <Frame title="Edukasi" step="F7 · MATERI PENELITIAN">
-        <Copy style={styles.muted}>
-          Susunan materi tersedia tanpa internet. Isi edukasi menunggu materi yang disetujui
-          peneliti.
-        </Copy>
-        {education.map((title, i) => (
-          <Card key={title}>
-            <Copy style={local.tileNumber}>0{i + 1}</Copy>
-            <Copy style={styles.sectionTitle}>{title}</Copy>
-            <Copy>Teks, gambar atau video belum tersedia untuk diunduh.</Copy>
-          </Card>
-        ))}
-      </Frame>
-    </Protected>
-  );
+  const {session} = usePatient();
+  return <Protected><EducationCatalog key={session?.token ?? 'signed-out'} /></Protected>;
 }
 export function EventScreen() {
   return (
