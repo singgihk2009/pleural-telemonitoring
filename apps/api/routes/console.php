@@ -1,6 +1,7 @@
 <?php
 
 use App\Auth\ResearchRoleCode;
+use App\Education\EducationCatalog;
 use App\Models\AuditLog;
 use App\Models\ResearchRole;
 use App\Models\StaffUser;
@@ -31,3 +32,25 @@ Artisan::command('telenapas:create-staff', function () {
     });
     $this->info('Staff account provisioned. Credentials are not displayed.');
 })->purpose('Provision a staff account through a trusted, interactive console operator');
+
+Artisan::command('telenapas:import-education-drafts', function (EducationCatalog $catalog) {
+    if (! app()->environment(['local', 'testing', 'uat']) || DB::connection()->getDriverName() !== 'mysql'
+        || ! (DB::connection()->getDatabaseName() === 'pleural_dev' || str_ends_with(DB::connection()->getDatabaseName(), '_test'))) {
+        $this->error('Use a local development or disposable UAT MySQL schema.');
+
+        return 1;
+    }
+    $drafts = json_decode(file_get_contents(resource_path('education/research-baseline.json')), true, flags: JSON_THROW_ON_ERROR);
+    DB::transaction(function () use ($drafts, $catalog) {
+        foreach ($drafts as $draft) {
+            $catalog->validateLinks($draft['references']);
+            if (! DB::table('education_topics')->insertOrIgnore(['code' => $draft['code']])) {
+                continue;
+            }
+            $catalog->append((object) ['code' => $draft['code'], 'latest_version' => 0, 'published_version' => null], $draft, 'DRAFT', null);
+            AuditLog::create(['actor_id' => null, 'aksi' => 'education.draft_imported', 'entity_type' => 'education_topic',
+                'entity_id' => $draft['code'], 'terjadi_pada' => now(), 'metadata_redacted' => ['outcome_code' => 'CONSOLE_OPERATOR']]);
+        }
+    }, 3);
+    $this->info('Missing topics imported as drafts. Existing topics preserved.');
+})->purpose('Import the supplied education references as drafts in development or isolated UAT');

@@ -969,6 +969,207 @@ paths:
         schema:
           type: string
           format: uuid
+  /api/v1/patient/education:
+    get:
+      operationId: listPatientEducation
+      summary: List published education topics
+      security:
+      - bearerAuth: []
+      parameters:
+      - {name: page, in: query, schema: {type: integer, minimum: 1}}
+      responses:
+        '200':
+          description: Education catalog response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EducationPatientPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/patient/education/{code}:
+    parameters:
+    - {name: code, in: path, required: true, schema: {type: string, maxLength: 24}}
+    get:
+      operationId: getPatientEducation
+      summary: Read a published education topic
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Education catalog response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EducationPatientDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/research/education:
+    get:
+      operationId: listResearchEducation
+      summary: List current education drafts and publication status
+      security:
+      - bearerAuth: []
+      parameters:
+      - {name: page, in: query, schema: {type: integer, minimum: 1}}
+      responses:
+        '200':
+          description: Education catalog response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EducationResearchPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createEducationDraft
+      summary: Create an education draft
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EducationCreate'
+      responses:
+        '201':
+          description: Education catalog response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EducationReceipt'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          description: Topic code, state or expected version conflicts.
+  /api/v1/research/education/{code}:
+    parameters:
+    - {name: code, in: path, required: true, schema: {type: string, maxLength: 24}}
+    get:
+      operationId: getResearchEducation
+      summary: Preview an education revision and read its modification history
+      security:
+      - bearerAuth: []
+      parameters:
+      - {name: page, in: query, schema: {type: integer, minimum: 1}}
+      - {name: version, in: query, schema: {type: integer, minimum: 1}}
+      responses:
+        '200':
+          description: Education catalog response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EducationResearchDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+    put:
+      operationId: updateEducationDraft
+      summary: Append a new education draft
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EducationUpdate'
+      responses:
+        '200':
+          description: Education catalog response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EducationReceipt'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          description: Topic code, state or expected version conflicts.
+  /api/v1/research/education/{code}/publish:
+    parameters:
+    - {name: code, in: path, required: true, schema: {type: string, maxLength: 24}}
+    post:
+      operationId: publishEducation
+      summary: Explicitly publish a reviewed education draft
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EducationPublish'
+      responses:
+        '200':
+          description: Education catalog response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EducationReceipt'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          description: Topic code, state or expected version conflicts.
+  /api/v1/research/education/{code}/archive:
+    parameters:
+    - {name: code, in: path, required: true, schema: {type: string, maxLength: 24}}
+    post:
+      operationId: archiveEducation
+      summary: Archive an education topic and remove it from patient visibility
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EducationTransition'
+      responses:
+        '200':
+          description: Education catalog response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EducationReceipt'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          description: Topic code, state or expected version conflicts.
   /api/v1/patient/health-itues/status:
     get:
       operationId: patientHealthItuesStatus
@@ -1248,6 +1449,147 @@ paths:
         '429': *id007
 components:
   schemas:
+    EducationReference:
+      type: object
+      required: [type, label]
+      properties:
+        type: {type: string, enum: [ARTICLE, JOURNAL, DOI, PDF, YOUTUBE]}
+        label: {type: string, maxLength: 500}
+        url: {type: [string, 'null'], maxLength: 2048, description: HTTPS source URL. A citation without a URL is permitted for JOURNAL.}
+        canonical_url: {type: [string, 'null'], maxLength: 2048, description: Researcher-verified HTTPS destination preserved alongside the source in research views only.}
+    EducationDraft:
+      type: object
+      required: [title, display_order, references]
+      properties:
+        title: {type: string, maxLength: 160}
+        description: {type: [string, 'null'], maxLength: 4000}
+        display_order: {type: integer, minimum: 1, maximum: 65535}
+        references:
+          type: array
+          maxItems: 30
+          items: {$ref: '#/components/schemas/EducationReference'}
+    EducationCreate:
+      allOf:
+      - $ref: '#/components/schemas/EducationDraft'
+      - type: object
+        required: [code]
+        properties:
+          code: {type: string, pattern: '^[A-Z0-9-]{1,24}$'}
+    EducationUpdate:
+      allOf:
+      - $ref: '#/components/schemas/EducationDraft'
+      - type: object
+        required: [expected_version]
+        properties:
+          expected_version: {type: integer, minimum: 1}
+    EducationTransition:
+      type: object
+      required: [expected_version, confirm]
+      properties:
+        expected_version: {type: integer, minimum: 1}
+        confirm: {type: boolean, const: true}
+    EducationPublish:
+      allOf:
+      - $ref: '#/components/schemas/EducationTransition'
+      - type: object
+        required: [approval_reference]
+        properties:
+          approval_reference: {type: string, pattern: '^[A-Za-z0-9_-]{1,80}$'}
+    EducationPageMeta:
+      type: object
+      required: [current_page, last_page]
+      properties:
+        current_page: {type: integer}
+        last_page: {type: integer}
+    EducationSummary:
+      type: object
+      required: [code, title, description, display_order, version]
+      properties:
+        code: {type: string}
+        title: {type: string}
+        description: {type: string}
+        display_order: {type: integer}
+        version: {type: integer}
+    EducationRevision:
+      type: object
+      required: [version, status, actor_id, recorded_at, approval_reference]
+      properties:
+        version: {type: integer}
+        status: {type: string, enum: [DRAFT, PUBLISHED, ARCHIVED]}
+        actor_id: {type: [integer, 'null']}
+        recorded_at: {type: string, description: UTC database timestamp.}
+        approval_reference: {type: [string, 'null']}
+    EducationPatientSummary:
+      allOf:
+      - $ref: '#/components/schemas/EducationSummary'
+      - type: object
+        required: [has_video]
+        properties:
+          has_video: {type: boolean}
+    EducationResearchSummary:
+      allOf:
+      - $ref: '#/components/schemas/EducationSummary'
+      - $ref: '#/components/schemas/EducationRevision'
+      - type: object
+        required: [published_version]
+        properties:
+          published_version: {type: [integer, 'null']}
+    EducationReceipt:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [code, version]
+          properties:
+            code: {type: string}
+            version: {type: integer}
+    EducationPatientPage:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/EducationPatientSummary'}
+        meta: {$ref: '#/components/schemas/EducationPageMeta'}
+    EducationPatientDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          allOf:
+          - $ref: '#/components/schemas/EducationPatientSummary'
+          - type: object
+            required: [references]
+            properties:
+              references:
+                type: array
+                items: {$ref: '#/components/schemas/EducationReference'}
+    EducationResearchPage:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/EducationResearchSummary'}
+        meta: {$ref: '#/components/schemas/EducationPageMeta'}
+    EducationResearchDetailResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          allOf:
+          - $ref: '#/components/schemas/EducationResearchSummary'
+          - type: object
+            required: [references, history]
+            properties:
+              references:
+                type: array
+                items: {$ref: '#/components/schemas/EducationReference'}
+              history:
+                type: array
+                items: {$ref: '#/components/schemas/EducationRevision'}
+        meta: {$ref: '#/components/schemas/EducationPageMeta'}
     HealthItuesBaseline:
       type: object
       required: [version, language, decision, source_sha256, subscales]

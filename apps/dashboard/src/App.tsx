@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { ApiError, errorMessage, request } from './api'
 import type { Group, Participant, Results, Session, Status } from './api'
 import { InstrumentReview } from './InstrumentReview'
+import { EducationManager } from './EducationManager'
 import { HealthItuesReview } from './HealthItuesReview'
 import { EnrollmentForm } from './EnrollmentForm'
 import { Brand, Icon } from './icons'
@@ -158,6 +159,7 @@ function Workspace({
   const [reload, setReload] = useState(0)
   const [editor, setEditor] = useState<{ id: string | null } | null>(null)
   const [healthItuesOpen, setHealthItuesOpen] = useState(false)
+  const [educationOpen, setEducationOpen] = useState(false)
   const [instrumentOpen, setInstrumentOpen] = useState(false)
   const [toast, setToast] = useState('')
   const [leaving, setLeaving] = useState(false)
@@ -300,6 +302,9 @@ function Workspace({
             </div>
           </header>
           <main className="dashboard-content">
+            <button type="button" className="secondary" aria-expanded={educationOpen} aria-controls="education-manager"
+              onClick={()=>setEducationOpen(open=>!open)}>{educationOpen ? 'Tutup Edukasi Pasien' : 'Materi Penelitian → Edukasi Pasien'}</button>
+            {educationOpen && <EducationManager key={session.token} session={session} onExpired={onExpired}/>}
             <button type="button" className="secondary" aria-expanded={healthItuesOpen} aria-controls="health-itues-review"
               onClick={() => setHealthItuesOpen(open => !open)}>{healthItuesOpen ? 'Tutup review Health-ITUES' : 'Review Health-ITUES'}</button>
             {healthItuesOpen && <HealthItuesReview key={session.token} session={session} onExpired={onExpired} />}

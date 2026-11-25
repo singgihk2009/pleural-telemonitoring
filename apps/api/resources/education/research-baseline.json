@@ -1,0 +1,45 @@
+[
+  {
+    "code": "EDU-01",
+    "title": "Tanda Bahaya",
+    "description": "",
+    "display_order": 1,
+    "references": [
+      {"type":"ARTICLE","label":"Agar Cepat Pulih: Pantangan Setelah Sedot Cairan Paru","url":"https://www.halodoc.com/artikel/agar-cepat-pulih-pantangan-setelah-sedot-cairan-paru"},
+      {"type":"JOURNAL","label":"Cantey, E., Walter, J., Corbridge, T., & Barsuk, J. (2016). Complications of thoracentesis: incidence, risk factors, and strategies for prevention. Current Opinion in Pulmonary Medicine, 22(4), 378–385."},
+      {"type":"DOI","label":"DOI · Complications of thoracentesis","url":"https://doi.org/10.1097/MCP.0000000000000285"}
+    ]
+  },
+  {
+    "code": "EDU-02",
+    "title": "Teknik Napas Pursed Lip Breathing dan Diafragma",
+    "description": "",
+    "display_order": 2,
+    "references": [
+      {"type":"ARTICLE","label":"Pursed Lip Breathing, Kenali Manfaat dan Cara Melakukannya","url":"https://www.alodokter.com/pursed-lip-breathing-kenali-manfaat-dan-cara-melakukannya"},
+      {"type":"JOURNAL","label":"Rojabani, D. D., Sari, E. A., & Platini, H. (2024). PURSED LIP BREATHING DAPAT MENURUNKAN SESAK PADA PASIEN CHRONIC KIDNEY DISEASE (CKD) DENGAN EFUSI PLEURA: CASE REPORT. SENTRI: Jurnal Riset Ilmiah, 3(2), 577–585."},
+      {"type":"DOI","label":"DOI · SENTRI case report","url":"https://doi.org/10.55681/sentri.v3i2.2298"},
+      {"type":"YOUTUBE","label":"Video dari tim peneliti","url":"https://youtu.be/QDgrjQTLdB0?si=2jHEYWwPSG03reOS"}
+    ]
+  },
+  {
+    "code": "EDU-03",
+    "title": "Perawatan Bekas Tusukan (Thoracentesis)",
+    "description": "",
+    "display_order": 3,
+    "references": [
+      {"type":"ARTICLE","label":"Alomedika · Manajemen Luka: Edukasi Pasien","url":"https://www.alomedika.com/tindakan-medis/bedah-minor/manajemen-luka/edukasi-pasien"},
+      {"type":"PDF","label":"UW Medicine. (n.d.). After your ultrasound-guided thoracentesis [Patient education handout]. University of Washington.","url":"https://healthonline.washington.edu/sites/default/files/record_pdfs/After-Your-Ultrasound-guided-Thoracentesis.pdf"},
+      {"type":"ARTICLE","label":"NYU Langone Health. (n.d.). Discharge instructions for thoracentesis.","url":"https://nyulangoneib.staywellsolutionsonline.com/Bedside/22,91206"}
+    ]
+  },
+  {
+    "code": "EDU-04",
+    "title": "Kapan Harus Kontrol",
+    "description": "",
+    "display_order": 4,
+    "references": [
+      {"type":"ARTICLE","label":"Agar Cepat Pulih: Pantangan Setelah Sedot Cairan Paru.","url":"https://share.google/8F7HRhBspoyXaj19q"}
+    ]
+  }
+]
