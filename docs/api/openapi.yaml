@@ -969,6 +969,61 @@ paths:
         schema:
           type: string
           format: uuid
+  /api/v1/patient/health-itues/status:
+    get:
+      operationId: patientHealthItuesStatus
+      summary: Get Health-ITUES readiness without asserting eligibility
+      description: Patient principal only. Read-only preview is restricted to isolated synthetic UAT. Submission is closed.
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Non-cacheable readiness and optional UAT preview.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [can_submit, preview]
+                    properties:
+                      can_submit: {type: boolean, const: false}
+                      preview:
+                        anyOf:
+                        - $ref: '#/components/schemas/HealthItuesBaseline'
+                        - type: 'null'
+        '401':
+          description: Authentication required.
+        '403':
+          description: Patient principal required.
+        '429':
+          description: Too many requests.
+  /api/v1/research/health-itues/instrument:
+    get:
+      operationId: reviewHealthItuesInstrument
+      summary: Review the versioned Health-ITUES content baseline
+      description: Researcher enrollment authority required. Read is audited and non-cacheable. The baseline is not a publication.
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Content baseline without response options or participant data.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/HealthItuesBaseline'
+        '401':
+          description: Authentication required.
+        '403':
+          description: Researcher authority required.
+        '429':
+          description: Too many requests.
   /api/v1/patient/assessments/status:
     get:
       operationId: patientAssessmentStatus
@@ -1193,6 +1248,30 @@ paths:
         '429': *id007
 components:
   schemas:
+    HealthItuesBaseline:
+      type: object
+      required: [version, language, decision, source_sha256, subscales]
+      properties:
+        version: {type: string}
+        language: {type: string, const: id}
+        decision: {type: string}
+        source_sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        subscales:
+          type: array
+          items:
+            type: object
+            required: [label, source_image, items]
+            properties:
+              label: {type: string}
+              source_image: {type: string}
+              items:
+                type: array
+                items:
+                  type: object
+                  required: [code, statement]
+                  properties:
+                    code: {type: string}
+                    statement: {type: string}
     CredentialRevision:
       type:
       - string

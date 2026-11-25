@@ -226,7 +226,6 @@ function Home() {
       <Button
         title="Buka formulir akhir"
         secondary
-        disabled={day === null || day < 30}
         onPress={() => router.push('/final')}
       />
       <Button
@@ -408,26 +407,40 @@ export function EventScreen() {
   );
 }
 export function FinalScreen() {
-  const day = useDay();
-  return (
-    <Protected final>
-      <Frame title="Penilaian aplikasi" step="F10 · FORMULIR AKHIR">
-        <Card>
-          <Heading>Health-ITUES</Heading>
-          <Copy>
-            Item dan versi Indonesia akan diberikan peneliti. Belum ada pertanyaan atau skor yang
-            ditampilkan.
-          </Copy>
-          <Copy>
-            {day === null || day < 30
-              ? 'Formulir dijadwalkan pada hari ke-30.'
-              : 'Anda telah mencapai periode formulir akhir.'}
-          </Copy>
-          <Button title="Kirim penilaian · belum tersedia" disabled />
-        </Card>
-      </Frame>
-    </Protected>
-  );
+  const { session } = usePatient();
+  return <Protected final><HealthItuesStatus key={session?.token ?? 'signed-out'} /></Protected>;
+}
+
+type HealthItuesPreview = {
+  version: string;
+  subscales: { label: string; items: { code: string; statement: string }[] }[];
+};
+
+function HealthItuesStatus() {
+  const { api } = usePatient();
+  const [preview, setPreview] = useState<HealthItuesPreview | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    void api<{ data: { preview: HealthItuesPreview | null } }>('/patient/health-itues/status')
+      .then(result => { if (mounted) setPreview(result.data.preview); })
+      .catch(() => { if (mounted) setPreview(null); });
+    return () => { mounted = false; };
+  }, [api]);
+
+  return <Frame title="Penilaian aplikasi" step="F10 · FORMULIR AKHIR">
+    <Card>
+      <Heading>Health-ITUES</Heading>
+      <Copy>Pengisian belum dibuka. Tim penelitian masih menetapkan siapa yang mengisi, pilihan jawaban, dan jadwal.</Copy>
+      <Button title="Kirim penilaian · belum tersedia" disabled />
+    </Card>
+    {preview && <>
+      <Notice>Pratinjau UAT sintetis · versi {preview.version}. Tidak ada jawaban yang dikumpulkan.</Notice>
+      {preview.subscales.map(group => <Card key={group.label}>
+        <Heading>{group.label}</Heading>
+        {group.items.map(item => <Copy key={item.code}>{item.code} · {item.statement}</Copy>)}
+      </Card>)}
+    </>}
+  </Frame>;
 }
 const local = StyleSheet.create({
   check: {

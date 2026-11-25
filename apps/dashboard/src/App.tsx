@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { ApiError, errorMessage, request } from './api'
 import type { Group, Participant, Results, Session, Status } from './api'
 import { InstrumentReview } from './InstrumentReview'
+import { HealthItuesReview } from './HealthItuesReview'
 import { EnrollmentForm } from './EnrollmentForm'
 import { Brand, Icon } from './icons'
 import './App.css'
@@ -156,6 +157,7 @@ function Workspace({
   const [page, setPage] = useState(1)
   const [reload, setReload] = useState(0)
   const [editor, setEditor] = useState<{ id: string | null } | null>(null)
+  const [healthItuesOpen, setHealthItuesOpen] = useState(false)
   const [instrumentOpen, setInstrumentOpen] = useState(false)
   const [toast, setToast] = useState('')
   const [leaving, setLeaving] = useState(false)
@@ -298,6 +300,9 @@ function Workspace({
             </div>
           </header>
           <main className="dashboard-content">
+            <button type="button" className="secondary" aria-expanded={healthItuesOpen} aria-controls="health-itues-review"
+              onClick={() => setHealthItuesOpen(open => !open)}>{healthItuesOpen ? 'Tutup review Health-ITUES' : 'Review Health-ITUES'}</button>
+            {healthItuesOpen && <HealthItuesReview key={session.token} session={session} onExpired={onExpired} />}
             <section className="page-heading">
               <div>
                 <span className="eyebrow">ENROLLMENT & BASELINE</span>
